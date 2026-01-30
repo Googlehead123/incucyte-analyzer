@@ -128,6 +128,37 @@ const removeMinMax = (values) => {
   return sorted.slice(1, -1);
 };
 
+const selectBestTriplicate = (wells, rawData, timeIdx) => {
+  if (wells.length <= 3) return wells;
+  const validWells = wells.filter(w => {
+    const v = rawData[w]?.[timeIdx];
+    return v !== null && v !== undefined && !isNaN(v);
+  });
+  if (validWells.length <= 3) return validWells;
+
+  let bestCombo = validWells.slice(0, 3);
+  let bestVariance = Infinity;
+
+  for (let i = 0; i < validWells.length - 2; i++) {
+    for (let j = i + 1; j < validWells.length - 1; j++) {
+      for (let k = j + 1; k < validWells.length; k++) {
+        const vals = [
+          rawData[validWells[i]][timeIdx],
+          rawData[validWells[j]][timeIdx],
+          rawData[validWells[k]][timeIdx]
+        ];
+        const mean = (vals[0] + vals[1] + vals[2]) / 3;
+        const variance = (Math.pow(vals[0] - mean, 2) + Math.pow(vals[1] - mean, 2) + Math.pow(vals[2] - mean, 2)) / 2;
+        if (variance < bestVariance) {
+          bestVariance = variance;
+          bestCombo = [validWells[i], validWells[j], validWells[k]];
+        }
+      }
+    }
+  }
+  return bestCombo;
+};
+
 const parseIncucyteData = (text) => {
   const lines = text.split('\n').filter(line => line.trim());
   let headerIndex = -1;
@@ -327,7 +358,7 @@ function App() {
   const [timepoints, setTimepoints] = useState([]);
   const [conditions, setConditions] = useState([]);
   const [excludedWells, setExcludedWells] = useState(new Set());
-  const [autoRemoveMinMax, setAutoRemoveMinMax] = useState(true);
+  const [outlierMethod, setOutlierMethod] = useState('none');
   const [errorBarType, setErrorBarType] = useState('sem');
   const [selectedTimepoint, setSelectedTimepoint] = useState(24);
   const [processedData, setProcessedData] = useState(null);
@@ -542,15 +573,28 @@ function App() {
       pValues: {}, auc: {},
       controlName: conditions[controlConditionIdx]?.name || conditions[0]?.name
     };
+
+    const selectedIdx = timepoints.findIndex(t => t === selectedTimepoint);
+
+    // Pre-compute filtered wells for bestTriplicate (selected once, used everywhere)
+    const conditionWellsMap = {};
+    conditions.forEach(condition => {
+      const activeWells = condition.wells.filter(well => !excludedWells.has(well));
+      if (outlierMethod === 'bestTriplicate' && activeWells.length > 3 && selectedIdx >= 0) {
+        conditionWellsMap[condition.name] = selectBestTriplicate(activeWells, rawData, selectedIdx);
+      } else {
+        conditionWellsMap[condition.name] = activeWells;
+      }
+    });
     
     timepoints.forEach((time, timeIdx) => {
       const timeData = { time };
       conditions.forEach(condition => {
-        let values = condition.wells
-          .filter(well => !excludedWells.has(well))
+        const wellsToUse = outlierMethod === 'bestTriplicate' ? conditionWellsMap[condition.name] : condition.wells.filter(well => !excludedWells.has(well));
+        let values = wellsToUse
           .map(well => rawData[well]?.[timeIdx])
           .filter(v => v !== null && v !== undefined && !isNaN(v));
-        if (autoRemoveMinMax && values.length > 2) values = removeMinMax(values);
+        if (outlierMethod === 'minmax' && values.length > 2) values = removeMinMax(values);
         const stats = calculateStats(values);
         timeData[`${condition.name}_mean`] = stats.mean;
         timeData[`${condition.name}_sd`] = stats.sd;
@@ -560,26 +604,43 @@ function App() {
       results.timeCourse.push(timeData);
     });
     
-    const selectedIdx = timepoints.findIndex(t => t === selectedTimepoint);
     const controlCondition = conditions[controlConditionIdx];
     
     if (selectedIdx >= 0) {
-      let controlValues = controlCondition?.wells
-        .filter(well => !excludedWells.has(well))
+      const controlWells = outlierMethod === 'bestTriplicate' ? conditionWellsMap[controlCondition?.name] : controlCondition?.wells.filter(well => !excludedWells.has(well));
+      let controlValues = (controlWells || [])
         .map(well => rawData[well]?.[selectedIdx])
-        .filter(v => v !== null && v !== undefined && !isNaN(v)) || [];
-      if (autoRemoveMinMax && controlValues.length > 2) controlValues = removeMinMax(controlValues);
+        .filter(v => v !== null && v !== undefined && !isNaN(v));
+      if (outlierMethod === 'minmax' && controlValues.length > 2) controlValues = removeMinMax(controlValues);
       
       conditions.forEach(condition => {
-        let values = condition.wells
-          .filter(well => !excludedWells.has(well))
+        const wellsToUse = outlierMethod === 'bestTriplicate' ? conditionWellsMap[condition.name] : condition.wells.filter(well => !excludedWells.has(well));
+        let values = wellsToUse
           .map(well => rawData[well]?.[selectedIdx])
           .filter(v => v !== null && v !== undefined && !isNaN(v));
-        if (autoRemoveMinMax && values.length > 2) values = removeMinMax(values);
+        if (outlierMethod === 'minmax' && values.length > 2) values = removeMinMax(values);
         results.statistics[condition.name] = calculateStats(values);
         results.pValues[condition.name] = condition.name !== controlCondition?.name 
           ? tTest(controlValues, values) 
           : { p: 1, stars: '-', significant: false };
+      });
+
+      results.representativeWells = {};
+      conditions.forEach(condition => {
+        const activeWells = condition.wells.filter(well => !excludedWells.has(well));
+        const condMean = results.statistics[condition.name]?.mean;
+        if (condMean === undefined || activeWells.length === 0) return;
+        let closestWell = null;
+        let closestDiff = Infinity;
+        activeWells.forEach(well => {
+          const val = rawData[well]?.[selectedIdx];
+          if (val === null || val === undefined || isNaN(val)) return;
+          const diff = Math.abs(val - condMean);
+          if (diff < closestDiff) { closestDiff = diff; closestWell = well; }
+        });
+        if (closestWell) {
+          results.representativeWells[condition.name] = { well: closestWell, value: rawData[closestWell][selectedIdx] };
+        }
       });
     }
     
@@ -595,7 +656,7 @@ function App() {
     
     setProcessedData(results);
     setStep(4);
-  }, [rawData, conditions, timepoints, excludedWells, autoRemoveMinMax, selectedTimepoint, controlConditionIdx]);
+  }, [rawData, conditions, timepoints, excludedWells, outlierMethod, selectedTimepoint, controlConditionIdx]);
 
   const barChartData = useMemo(() => {
     if (!processedData) return [];
@@ -660,11 +721,12 @@ function App() {
       });
       csv += '\n';
     });
-    csv += `\n\nEndpoint Statistics (t=${selectedTimepoint}h)\nCondition,Mean,SD,SEM,N,p-value,Significance,AUC,Relative AUC (%)\n`;
+    csv += `\n\nEndpoint Statistics (t=${selectedTimepoint}h)\nCondition,Mean,SD,SEM,N,p-value,Significance,AUC,Relative AUC (%),Representative Well,Rep. Well Value\n`;
     conditions.forEach(c => {
       const stats = processedData.statistics[c.name] || {};
       const pVal = processedData.pValues[c.name] || {};
-      csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pVal.p?.toFixed(4) || ''},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''}\n`;
+      const repWell = processedData.representativeWells?.[c.name];
+      csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pVal.p?.toFixed(4) || ''},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''},${repWell?.well || ''},${repWell?.value?.toFixed(4) || ''}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const link = document.createElement('a');
@@ -976,13 +1038,22 @@ function App() {
                     style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', backgroundColor: '#334155', border: '1px solid #475569', color: '#f1f5f9', fontSize: '14px' }} />
                 </div>
                 
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={autoRemoveMinMax} onChange={(e) => setAutoRemoveMinMax(e.target.checked)} style={{ marginTop: '2px' }} />
-                  <div>
-                    <span style={{ fontSize: '14px', fontWeight: '500' }}>Remove min/max outliers</span>
-                    <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0 0' }}>Excludes extreme values</p>
+                <div>
+                  <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '8px' }}>Outlier Removal</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {[{ key: 'none', label: 'None' }, { key: 'minmax', label: 'Min/Max' }, { key: 'bestTriplicate', label: 'Best Triplicate' }].map(opt => (
+                      <button key={opt.key} onClick={() => setOutlierMethod(opt.key)}
+                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none',
+                          backgroundColor: outlierMethod === opt.key ? '#0891b2' : '#334155',
+                          color: outlierMethod === opt.key ? 'white' : '#e2e8f0', fontWeight: '500', cursor: 'pointer', fontSize: '12px' }}>
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
-                </label>
+                  <p style={{ fontSize: '11px', color: '#94a3b8', margin: '6px 0 0 0' }}>
+                    {outlierMethod === 'minmax' ? 'Removes highest & lowest values per timepoint' : outlierMethod === 'bestTriplicate' ? 'Selects 3 wells with smallest variance' : 'No outlier filtering applied'}
+                  </p>
+                </div>
                 
                 <div>
                   <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '8px' }}>Error Bars</label>
@@ -1162,6 +1233,7 @@ function App() {
                       <th style={{ textAlign: 'right', padding: '8px' }}>N</th>
                       <th style={{ textAlign: 'right', padding: '8px' }}>p-value</th>
                       <th style={{ textAlign: 'center', padding: '8px' }}>Sig.</th>
+                      <th style={{ textAlign: 'right', padding: '8px' }}>Rep. Well</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1181,6 +1253,9 @@ function App() {
                           <td style={{ textAlign: 'right', padding: '8px', color: '#94a3b8' }}>{stats.n}</td>
                           <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>{isControl ? '-' : pVal.p?.toFixed(4)}</td>
                           <td style={{ textAlign: 'center', padding: '8px', color: '#fbbf24', fontWeight: 'bold' }}>{pVal.stars || '-'}</td>
+                          <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>
+                            {processedData.representativeWells?.[condition.name] ? `${processedData.representativeWells[condition.name].well} (${processedData.representativeWells[condition.name].value?.toFixed(1)}%)` : '-'}
+                          </td>
                         </tr>
                       );
                     })}
@@ -1205,7 +1280,7 @@ function App() {
                 
                 <div style={{ marginTop: '12px', padding: '12px', backgroundColor: 'rgba(51, 65, 85, 0.3)', borderRadius: '12px', fontSize: '11px', color: '#64748b' }}>
                   <div>• Endpoint: {selectedTimepoint}h • Error: {errorBarType.toUpperCase()}</div>
-                  <div>• Outlier removal: {autoRemoveMinMax ? 'On' : 'Off'} • Test: Welch's t-test</div>
+                  <div>• Outlier removal: {outlierMethod === 'none' ? 'None' : outlierMethod === 'minmax' ? 'Min/Max' : 'Best Triplicate'} • Test: Welch's t-test</div>
                 </div>
               </div>
             </div>
