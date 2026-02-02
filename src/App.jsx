@@ -280,7 +280,7 @@ const Sparkline = ({ data, color }) => {
   );
 };
 
-const ExportPanel = ({ onExportPNG, onExportSVG, onExportCSV, isExporting, chartTheme, setChartTheme }) => {
+const ExportPanel = ({ onExportPNG, onExportCSV, isExporting, chartTheme, setChartTheme }) => {
   return (
     <div style={{
       backgroundColor: 'rgba(30, 41, 59, 0.95)',
@@ -328,14 +328,6 @@ const ExportPanel = ({ onExportPNG, onExportSVG, onExportCSV, isExporting, chart
           }}>
           📷 Export PNG (300 DPI)
         </button>
-        <button onClick={onExportSVG} disabled={isExporting}
-          style={{
-            padding: '12px 16px', borderRadius: '8px', border: 'none',
-            backgroundColor: '#7c3aed', color: 'white', fontWeight: '500',
-            cursor: isExporting ? 'wait' : 'pointer', opacity: isExporting ? 0.7 : 1
-          }}>
-          🎨 Export SVG (Vector)
-        </button>
         <button onClick={onExportCSV}
           style={{
             padding: '12px 16px', borderRadius: '8px', border: 'none',
@@ -373,6 +365,7 @@ function App() {
   const [xAxisLabel, setXAxisLabel] = useState('Time (hours)');
   const [yAxisLabel, setYAxisLabel] = useState('Relative Wound Density (%)');
   
+  const [timeCourseEndpoint, setTimeCourseEndpoint] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
@@ -683,6 +676,12 @@ function App() {
     }));
   }, [processedData, conditions, errorBarType]);
 
+  const filteredTimeCourse = useMemo(() => {
+    if (!processedData) return [];
+    if (timeCourseEndpoint === null) return processedData.timeCourse;
+    return processedData.timeCourse.filter(row => row.time <= timeCourseEndpoint);
+  }, [processedData, timeCourseEndpoint]);
+
   const exportToPNG = useCallback(async (elementRef, filename) => {
     if (!elementRef.current) return;
     setIsExporting(true);
@@ -701,24 +700,6 @@ function App() {
       alert('Export failed. Please try again.');
     }
     setIsExporting(false);
-  }, [theme]);
-
-  const exportToSVG = useCallback((elementRef, filename) => {
-    if (!elementRef.current) return;
-    const svgElement = elementRef.current.querySelector('svg');
-    if (!svgElement) { alert('No chart found'); return; }
-    const clonedSvg = svgElement.cloneNode(true);
-    clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('width', '100%');
-    rect.setAttribute('height', '100%');
-    rect.setAttribute('fill', theme.background);
-    clonedSvg.insertBefore(rect, clonedSvg.firstChild);
-    const blob = new Blob([new XMLSerializer().serializeToString(clonedSvg)], { type: 'image/svg+xml' });
-    const link = document.createElement('a');
-    link.download = `${filename}.svg`;
-    link.href = URL.createObjectURL(blob);
-    link.click();
   }, [theme]);
 
   const exportToCSV = useCallback(() => {
@@ -740,12 +721,27 @@ function App() {
       const repWell = processedData.representativeWells?.[c.name];
       csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pVal.p?.toFixed(4) || ''},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''},${repWell?.well || ''},${repWell?.value?.toFixed(4) || ''}\n`;
     });
+    csv += `\n\nRaw Well Data (Time Course)\n`;
+    conditions.forEach(c => {
+      const activeWells = c.wells.filter(w => !excludedWells.has(w));
+      if (activeWells.length === 0) return;
+      csv += `\n${c.name}\n`;
+      csv += `Time (h),${activeWells.join(',')}\n`;
+      timepoints.forEach((time, timeIdx) => {
+        csv += time;
+        activeWells.forEach(well => {
+          const val = rawData[well]?.[timeIdx];
+          csv += `,${val !== null && val !== undefined && !isNaN(val) ? val.toFixed(4) : ''}`;
+        });
+        csv += '\n';
+      });
+    });
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${fileName.replace(/\.[^/.]+$/, '')}_analyzed.csv`;
     link.click();
-  }, [processedData, conditions, fileName, selectedTimepoint]);
+  }, [processedData, conditions, fileName, selectedTimepoint, rawData, timepoints, excludedWells]);
 
   const plateGrid = useMemo(() => ({
     rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
@@ -1132,7 +1128,6 @@ function App() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                 <ExportPanel
                   onExportPNG={() => exportToPNG(timeCourseRef, `${fileName.replace(/\.[^/.]+$/, '')}_timecourse`)}
-                  onExportSVG={() => exportToSVG(timeCourseRef, `${fileName.replace(/\.[^/.]+$/, '')}_timecourse`)}
                   onExportCSV={exportToCSV}
                   isExporting={isExporting}
                   chartTheme={chartTheme}
@@ -1145,25 +1140,36 @@ function App() {
                       style={{ padding: '12px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#0891b2', color: 'white', fontWeight: '500', cursor: isExporting ? 'wait' : 'pointer' }}>
                       📷 Export Bar Chart PNG
                     </button>
-                    <button onClick={() => exportToSVG(barChartRef, `${fileName.replace(/\.[^/.]+$/, '')}_endpoint`)}
-                      style={{ padding: '12px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#7c3aed', color: 'white', fontWeight: '500', cursor: 'pointer' }}>
-                      🎨 Export Bar Chart SVG
-                    </button>
                   </div>
                 </div>
               </div>
             )}
             
             <div style={styles.chartCard} ref={timeCourseRef}>
-              <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: theme.textColor }}>
-                Wound Healing Time Course
-              </h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: theme.textColor }}>
+                  Wound Healing Time Course
+                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ fontSize: '12px', color: theme.tickColor }}>Show until:</label>
+                  <select 
+                    value={timeCourseEndpoint === null ? '' : timeCourseEndpoint}
+                    onChange={(e) => setTimeCourseEndpoint(e.target.value === '' ? null : Number(e.target.value))}
+                    style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.background === '#ffffff' ? '#f3f4f6' : '#334155', border: `1px solid ${theme.gridColor}`, color: theme.textColor, fontSize: '12px' }}
+                  >
+                    <option value="">All ({Math.max(...timepoints)}h)</option>
+                    {timepoints.filter(t => t > 0).map(t => (
+                      <option key={t} value={t}>{t}h</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <p style={{ fontSize: '11px', color: theme.tickColor, marginBottom: '16px' }}>
                 Data shown as mean ± {errorBarType.toUpperCase()} (n={processedData.statistics[conditions[0]?.name]?.n || 0})
               </p>
               <div style={{ height: '420px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={processedData.timeCourse} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                  <LineChart data={filteredTimeCourse} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={theme.gridColor} />
                     <XAxis 
                       dataKey="time" 
