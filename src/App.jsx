@@ -635,16 +635,27 @@ function App() {
         const activeWells = condition.wells.filter(well => !excludedWells.has(well));
         const condMean = results.statistics[condition.name]?.mean;
         if (condMean === undefined || activeWells.length === 0) return;
-        let closestWell = null;
-        let closestDiff = Infinity;
-        activeWells.forEach(well => {
-          const val = rawData[well]?.[selectedIdx];
-          if (val === null || val === undefined || isNaN(val)) return;
-          const diff = Math.abs(val - condMean);
-          if (diff < closestDiff) { closestDiff = diff; closestWell = well; }
-        });
-        if (closestWell) {
-          results.representativeWells[condition.name] = { well: closestWell, value: rawData[closestWell][selectedIdx] };
+        
+        if (outlierMethod === 'bestTriplicate' && conditionWellsMap[condition.name]) {
+          // Show the best triplicate wells directly
+          const bestWells = conditionWellsMap[condition.name];
+          results.representativeWells[condition.name] = bestWells.map(well => ({
+            well, value: rawData[well]?.[selectedIdx]
+          }));
+        } else {
+          // Find top 3 wells closest to the mean
+          const wellDiffs = activeWells
+            .map(well => {
+              const val = rawData[well]?.[selectedIdx];
+              if (val === null || val === undefined || isNaN(val)) return null;
+              return { well, value: val, diff: Math.abs(val - condMean) };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.diff - b.diff)
+            .slice(0, 3);
+          if (wellDiffs.length > 0) {
+            results.representativeWells[condition.name] = wellDiffs.map(w => ({ well: w.well, value: w.value }));
+          }
         }
       });
     }
@@ -714,12 +725,16 @@ function App() {
       });
       csv += '\n';
     });
-    csv += `\n\nEndpoint Statistics (t=${selectedTimepoint}h)\nCondition,Mean,SD,SEM,N,p-value,Significance,AUC,Relative AUC (%),Representative Well,Rep. Well Value\n`;
+    csv += `\n\nEndpoint Statistics (t=${selectedTimepoint}h)\nCondition,Mean,SD,SEM,N,p-value,Significance,AUC,Relative AUC (%),Rep. Well 1,Rep. Value 1,Rep. Well 2,Rep. Value 2,Rep. Well 3,Rep. Value 3\n`;
     conditions.forEach(c => {
       const stats = processedData.statistics[c.name] || {};
       const pVal = processedData.pValues[c.name] || {};
-      const repWell = processedData.representativeWells?.[c.name];
-      csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pVal.p?.toFixed(4) || ''},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''},${repWell?.well || ''},${repWell?.value?.toFixed(4) || ''}\n`;
+      const repWells = processedData.representativeWells?.[c.name] || [];
+      csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pVal.p?.toFixed(4) || ''},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''}`;
+      for (let i = 0; i < 3; i++) {
+        csv += `,${repWells[i]?.well || ''},${repWells[i]?.value?.toFixed(4) || ''}`;
+      }
+      csv += '\n';
     });
     csv += `\n\nRaw Well Data (Time Course)\n`;
     conditions.forEach(c => {
@@ -1261,7 +1276,7 @@ function App() {
                       <th style={{ textAlign: 'right', padding: '8px' }}>N</th>
                       <th style={{ textAlign: 'right', padding: '8px' }}>p-value</th>
                       <th style={{ textAlign: 'center', padding: '8px' }}>Sig.</th>
-                      <th style={{ textAlign: 'right', padding: '8px' }}>Rep. Well</th>
+                      <th style={{ textAlign: 'right', padding: '8px' }}>Rep. Wells (Top 3)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1282,7 +1297,11 @@ function App() {
                           <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>{isControl ? '-' : pVal.p?.toFixed(4)}</td>
                           <td style={{ textAlign: 'center', padding: '8px', color: '#fbbf24', fontWeight: 'bold' }}>{pVal.stars || '-'}</td>
                           <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>
-                            {processedData.representativeWells?.[condition.name] ? `${processedData.representativeWells[condition.name].well} (${processedData.representativeWells[condition.name].value?.toFixed(1)}%)` : '-'}
+                            {processedData.representativeWells?.[condition.name]?.length > 0
+                              ? processedData.representativeWells[condition.name].map((rw, i) => (
+                                  <span key={rw.well}>{i > 0 && ', '}{rw.well} ({rw.value?.toFixed(1)}%)</span>
+                                ))
+                              : '-'}
                           </td>
                         </tr>
                       );
