@@ -454,6 +454,18 @@ function App() {
     }));
   }, [conditions, wells]);
 
+  const assignColumnToCondition = useCallback((col, conditionIndex, rowStart, rowEnd) => {
+    setConditions(conditions.map((c, i) => {
+      const colWells = [];
+      for (let r = rowStart.charCodeAt(0); r <= rowEnd.charCodeAt(0); r++) {
+        const wellName = `${String.fromCharCode(r)}${col}`;
+        if (wells.includes(wellName)) colWells.push(wellName);
+      }
+      if (i === conditionIndex) return { ...c, wells: [...new Set([...c.wells, ...colWells])] };
+      return { ...c, wells: c.wells.filter(w => !colWells.includes(w)) };
+    }));
+  }, [conditions, wells]);
+
   const parseWell = useCallback((well) => {
     if (!well) return null;
     const row = well.charAt(0);
@@ -728,7 +740,7 @@ function App() {
       const repWell = processedData.representativeWells?.[c.name];
       csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pVal.p?.toFixed(4) || ''},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''},${repWell?.well || ''},${repWell?.value?.toFixed(4) || ''}\n`;
     });
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${fileName.replace(/\.[^/.]+$/, '')}_analyzed.csv`;
@@ -913,11 +925,21 @@ function App() {
               
               <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #334155' }}>
                 <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>Quick Assign: <span style={{ color: '#22d3ee' }}>{conditions[activeConditionIdx]?.name}</span></p>
+                <p style={{ fontSize: '10px', color: '#64748b', marginBottom: '6px' }}>Rows (horizontal)</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                   {['B', 'C', 'D', 'E', 'F', 'G'].map(row => (
                     <button key={row} onClick={() => assignRowToCondition(row, activeConditionIdx, 2, 7)}
                       style={{ padding: '6px', fontSize: '11px', backgroundColor: '#334155', border: 'none', borderRadius: '4px', color: '#e2e8f0', cursor: 'pointer' }}>
-                      {row}2-7
+                      {row}2-{row}7
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontSize: '10px', color: '#64748b', marginTop: '8px', marginBottom: '6px' }}>Columns (vertical)</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
+                  {[2, 3, 4, 5, 6, 7].map(col => (
+                    <button key={col} onClick={() => assignColumnToCondition(col, activeConditionIdx, 'B', 'G')}
+                      style={{ padding: '6px', fontSize: '11px', backgroundColor: '#334155', border: 'none', borderRadius: '4px', color: '#e2e8f0', cursor: 'pointer' }}>
+                      B{col}-G{col}
                     </button>
                   ))}
                 </div>
