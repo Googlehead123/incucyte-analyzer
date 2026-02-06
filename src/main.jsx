@@ -8,6 +8,7 @@ import LoginPage from './components/auth/LoginPage'
 import AuthCallback from './components/auth/AuthCallback'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminPanel from './components/admin/AdminPanel'
+import ExperimentsPage from './pages/ExperimentsPage'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -18,7 +19,11 @@ createRoot(document.getElementById('root')).render(
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/" element={<App />} />
           <Route path="/analyzer" element={<App />} />
-          <Route path="/experiments" element={<div>Experiments Page</div>} />
+          <Route path="/experiments" element={
+            <ProtectedRoute>
+              <ExperimentsPage />
+            </ProtectedRoute>
+          } />
           <Route path="/admin" element={
             <ProtectedRoute adminOnly>
               <AdminPanel />
