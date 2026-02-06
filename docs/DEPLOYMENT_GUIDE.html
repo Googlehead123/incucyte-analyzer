@@ -6,148 +6,121 @@
     <title>Deployment Guide: Incucyte Analyzer</title>
     <style>
         :root {
-            --primary-color: #0078d4; /* Microsoft Blue */
-            --primary-hover: #005a9e;
-            --bg-color: #f8f9fa;
-            --text-color: #212529;
-            --text-muted: #6c757d;
-            --border-color: #dee2e6;
-            --sidebar-bg: #ffffff;
-            --content-bg: #ffffff;
-            --code-bg: #f1f3f5;
-            --info-bg: #e7f3ff;
-            --info-border: #b6d4fe;
-            --warning-bg: #fff3cd;
-            --warning-border: #ffe69c;
-            --success-bg: #d1e7dd;
-            --success-border: #badbcc;
-            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --google-blue: #4285F4;
+            --google-red: #EA4335;
+            --google-yellow: #FBBC05;
+            --google-green: #34A853;
+            --text-color: #3c4043;
+            --heading-color: #202124;
+            --bg-color: #ffffff;
+            --sidebar-bg: #f8f9fa;
+            --border-color: #dadce0;
+            --code-bg: #202124;
+            --code-text: #f8f9fa;
+            --tip-bg: #e6f4ea;
+            --tip-border: #34a853;
+            --warning-bg: #fef7e0;
+            --warning-border: #fbbc04;
+            --important-bg: #e8f0fe;
+            --important-border: #4285f4;
+            --sidebar-width: 280px;
         }
 
         * {
             box-sizing: border-box;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
-            font-family: var(--font-family);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             line-height: 1.6;
             color: var(--text-color);
             background-color: var(--bg-color);
             margin: 0;
-            padding: 0;
-            scroll-behavior: smooth;
-        }
-
-        .container {
             display: flex;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-            gap: 2rem;
         }
 
         /* Sidebar / TOC */
-        .sidebar {
-            flex: 0 0 280px;
+        nav {
+            width: var(--sidebar-width);
+            height: 100vh;
             position: sticky;
-            top: 2rem;
-            height: calc(100vh - 4rem);
+            top: 0;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1rem;
             overflow-y: auto;
-            background: var(--sidebar-bg);
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            flex-shrink: 0;
         }
 
-        .sidebar h3 {
+        nav h2 {
+            font-size: 1.2rem;
+            color: var(--heading-color);
             margin-top: 0;
-            font-size: 1.1rem;
-            color: var(--primary-color);
-            border-bottom: 2px solid var(--primary-color);
-            padding-bottom: 0.5rem;
-            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
         }
 
-        .sidebar ul {
+        nav ul {
             list-style: none;
             padding: 0;
-            margin: 0;
         }
 
-        .sidebar li {
+        nav li {
             margin-bottom: 0.5rem;
         }
 
-        .sidebar a {
+        nav a {
             text-decoration: none;
             color: var(--text-color);
             font-size: 0.9rem;
-            transition: color 0.2s;
-        }
-
-        .sidebar a:hover {
-            color: var(--primary-color);
-        }
-
-        .sidebar .part-link {
-            font-weight: 600;
-            margin-top: 1rem;
             display: block;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            transition: background 0.2s;
         }
 
-        .sidebar .step-link {
-            padding-left: 1rem;
-            color: var(--text-muted);
+        nav a:hover {
+            background-color: #e8eaed;
+            color: var(--google-blue);
         }
 
         /* Main Content */
-        .main-content {
+        main {
             flex: 1;
-            background: var(--content-bg);
-            padding: 3rem;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            min-width: 0; /* Prevent overflow */
+            padding: 2rem 4rem;
+            max-width: 1000px;
+            min-width: 0;
+        }
+
+        header {
+            margin-bottom: 3rem;
+        }
+
+        h1, h2, h3 {
+            color: var(--heading-color);
+            margin-top: 2.5rem;
+            scroll-margin-top: 2rem;
         }
 
         h1 {
             font-size: 2.5rem;
+            border-bottom: 4px solid var(--google-blue);
+            padding-bottom: 0.5rem;
             margin-top: 0;
-            color: var(--primary-color);
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 1rem;
         }
 
         h2 {
             font-size: 1.8rem;
-            margin-top: 2.5rem;
-            color: var(--primary-color);
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 0.5rem;
+            padding-bottom: 0.3rem;
         }
 
         h3 {
             font-size: 1.4rem;
-            margin-top: 2rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        h3 input[type="checkbox"] {
-            width: 1.2rem;
-            height: 1.2rem;
-            cursor: pointer;
-        }
-
-        p, ul, ol {
-            margin-bottom: 1.2rem;
-        }
-
-        li {
-            margin-bottom: 0.5rem;
         }
 
         hr {
@@ -156,463 +129,559 @@
             margin: 3rem 0;
         }
 
+        /* Interactive Steps */
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .step-item:hover {
+            background-color: #f8f9fa;
+            border-color: var(--border-color);
+        }
+
+        .step-item input[type="checkbox"] {
+            margin-top: 0.4rem;
+            margin-right: 1.2rem;
+            width: 1.4rem;
+            height: 1.4rem;
+            cursor: pointer;
+            accent-color: var(--google-blue);
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-content ol, .step-content ul {
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
         /* Code Blocks */
-        code {
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        pre {
             background-color: var(--code-bg);
+            color: var(--code-text);
+            padding: 1.2rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin: 1rem 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        code {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background-color: #f1f3f4;
             padding: 0.2rem 0.4rem;
             border-radius: 4px;
             font-size: 0.9em;
         }
 
-        pre {
-            background-color: var(--code-bg);
-            padding: 1rem;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin-bottom: 1.5rem;
-            border: 1px solid var(--border-color);
-        }
-
         pre code {
+            background-color: transparent;
             padding: 0;
-            background: transparent;
+            font-size: 1em;
         }
 
         /* Alert Boxes */
         .alert {
             padding: 1rem 1.5rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
+            margin: 1.5rem 0;
             border-left: 5px solid;
+            border-radius: 4px;
         }
 
-        .alert-info {
-            background-color: var(--info-bg);
-            border-color: var(--info-border);
-            color: #084298;
+        .alert-tip {
+            background-color: var(--tip-bg);
+            border-color: var(--tip-border);
         }
 
         .alert-warning {
             background-color: var(--warning-bg);
             border-color: var(--warning-border);
-            color: #664d03;
         }
 
-        .alert-success {
-            background-color: var(--success-bg);
-            border-color: var(--success-border);
-            color: #0f5132;
+        .alert-important {
+            background-color: var(--important-bg);
+            border-color: var(--important-border);
         }
 
-        .alert strong {
+        .alert-title {
+            font-weight: bold;
+            margin-bottom: 0.3rem;
             display: block;
-            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
         }
 
-        /* Troubleshooting Collapsible */
+        /* Troubleshooting Collapsibles */
         details {
             margin-bottom: 1rem;
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            background: var(--bg-color);
+            overflow: hidden;
+            background-color: #fff;
+            transition: box-shadow 0.2s;
+        }
+
+        details:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
         summary {
-            padding: 1rem;
+            padding: 1rem 1.5rem;
+            background-color: #f8f9fa;
             cursor: pointer;
-            font-weight: 600;
+            font-weight: bold;
             outline: none;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        summary::after {
+            content: '+';
+            font-size: 1.2rem;
+            color: var(--google-blue);
+        }
+
+        details[open] summary::after {
+            content: '−';
         }
 
         summary:hover {
-            background-color: rgba(0,0,0,0.02);
+            background-color: #f1f3f4;
         }
 
         details[open] summary {
             border-bottom: 1px solid var(--border-color);
+            background-color: #fff;
         }
 
         .details-content {
-            padding: 1rem;
+            padding: 1.5rem;
         }
 
-        /* Summary Checklist */
+        /* Checklist */
         .checklist {
             list-style: none;
             padding: 0;
+            background-color: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
         }
 
         .checklist li {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.8rem;
+            border-bottom: 1px solid #e8eaed;
         }
 
         .checklist li:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
             border-bottom: none;
         }
 
-        .checklist input[type="checkbox"] {
-            width: 1.1rem;
-            height: 1.1rem;
+        .checklist input {
+            margin-right: 15px;
+            width: 1.2rem;
+            height: 1.2rem;
             cursor: pointer;
+            accent-color: var(--google-green);
         }
 
         /* Responsive */
-        @media (max-width: 992px) {
-            .container {
-                flex-direction: column;
-                padding: 1rem;
+        @media (max-width: 1024px) {
+            nav {
+                display: none;
             }
-            .sidebar {
-                position: static;
-                height: auto;
-                flex: none;
-                margin-bottom: 1rem;
-            }
-            .main-content {
-                padding: 1.5rem;
+            main {
+                padding: 2rem;
             }
         }
 
         /* Print Styles */
         @media print {
-            .sidebar, input[type="checkbox"] {
-                display: none !important;
+            nav {
+                display: none;
             }
-            .container {
-                display: block;
+            main {
                 padding: 0;
+                max-width: 100%;
             }
-            .main-content {
+            .step-item {
                 border: none;
-                box-shadow: none;
                 padding: 0;
             }
-            body {
-                background: white;
+            .step-item input[type="checkbox"] {
+                display: none;
             }
-            h1, h2, h3 {
-                page-break-after: avoid;
-            }
-            pre, blockquote, details {
+            details {
+                border: 1px solid #eee;
                 page-break-inside: avoid;
+            }
+            summary {
+                background: none;
+                padding: 0.5rem 0;
+            }
+            summary::after {
+                display: none;
+            }
+            details[open] summary {
+                border-bottom: 1px solid #eee;
+            }
+            pre {
+                border: 1px solid #eee;
+                box-shadow: none;
+                white-space: pre-wrap;
+                word-wrap: break-word;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <nav class="sidebar">
-            <h3>Contents</h3>
-            <ul>
-                <li><a href="#prerequisites">Prerequisites</a></li>
-                <li><a href="#overview">Overview</a></li>
-                <li><a href="#part-1" class="part-link">Part 1: Create Supabase Project</a>
-                    <ul>
-                        <li><a href="#step-1" class="step-link">Step 1: Sign up</a></li>
-                        <li><a href="#step-2" class="step-link">Step 2: New project</a></li>
-                        <li><a href="#step-3" class="step-link">Step 3: Credentials</a></li>
-                    </ul>
-                </li>
-                <li><a href="#part-2" class="part-link">Part 2: Set Up Database</a>
-                    <ul>
-                        <li><a href="#step-4" class="step-link">Step 4: Migrations</a></li>
-                        <li><a href="#step-5" class="step-link">Step 5: Verify tables</a></li>
-                    </ul>
-                </li>
-                <li><a href="#part-3" class="part-link">Part 3: Configure Azure AD</a>
-                    <ul>
-                        <li><a href="#step-6" class="step-link">Step 6: App Registration</a></li>
-                        <li><a href="#step-7" class="step-link">Step 7: Credentials</a></li>
-                        <li><a href="#step-8" class="step-link">Step 8: Enable in Supabase</a></li>
-                    </ul>
-                </li>
-                <li><a href="#part-4" class="part-link">Part 4: Deploy to Vercel</a>
-                    <ul>
-                        <li><a href="#step-9" class="step-link">Step 9: Push to GitHub</a></li>
-                        <li><a href="#step-10" class="step-link">Step 10: Deploy</a></li>
-                        <li><a href="#step-11" class="step-link">Step 11: Env Variables</a></li>
-                        <li><a href="#step-12" class="step-link">Step 12: Redirect URLs</a></li>
-                    </ul>
-                </li>
-                <li><a href="#part-5" class="part-link">Part 5: Test Deployment</a>
-                    <ul>
-                        <li><a href="#step-13" class="step-link">Step 13: Test App</a></li>
-                        <li><a href="#step-14" class="step-link">Step 14: Verify Admin</a></li>
-                    </ul>
-                </li>
-                <li><a href="#part-6" class="part-link">Part 6: Management</a></li>
-                <li><a href="#troubleshooting">Troubleshooting</a></li>
-                <li><a href="#security">Security Best Practices</a></li>
-                <li><a href="#cost">Cost Information</a></li>
-                <li><a href="#summary" class="part-link">Summary Checklist</a></li>
-            </ul>
-        </nav>
+    <nav>
+        <h2>Contents</h2>
+        <ul>
+            <li><a href="#prerequisites">Prerequisites</a></li>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#part-1">Part 1: Create Supabase Project</a></li>
+            <li><a href="#part-2">Part 2: Set Up Database</a></li>
+            <li><a href="#part-3">Part 3: Configure Google OAuth</a></li>
+            <li><a href="#part-4">Part 4: Deploy to Vercel</a></li>
+            <li><a href="#part-5">Part 5: Test Your Deployment</a></li>
+            <li><a href="#part-6">Part 6: Ongoing Management</a></li>
+            <li><a href="#troubleshooting">Troubleshooting</a></li>
+            <li><a href="#security">Security Best Practices</a></li>
+            <li><a href="#cost">Cost Information</a></li>
+            <li><a href="#help">Getting Help</a></li>
+            <li><a href="#summary">Summary Checklist</a></li>
+        </ul>
+    </nav>
 
-        <main class="main-content">
+    <main>
+        <header>
             <h1>Deployment Guide: Incucyte Analyzer</h1>
             <p>This guide will walk you through deploying the Incucyte Wound Healing Analyzer with authentication and database features using Supabase and Vercel.</p>
+        </header>
 
-            <h2 id="prerequisites">Prerequisites</h2>
+        <section id="prerequisites">
+            <h2>Prerequisites</h2>
             <ul>
-                <li>A Microsoft / Azure account (for Azure AD SSO)</li>
+                <li>A Google account (for Google OAuth SSO)</li>
                 <li>A GitHub account (for Vercel deployment)</li>
                 <li>Basic familiarity with web browsers</li>
             </ul>
+        </section>
 
-            <h2 id="overview">Overview</h2>
+        <section id="overview">
+            <h2>Overview</h2>
             <p>You'll be setting up:</p>
             <ol>
                 <li><strong>Supabase</strong> - Database and authentication backend</li>
-                <li><strong>Azure Portal</strong> - Azure AD App Registration</li>
+                <li><strong>Google Cloud Console</strong> - Google OAuth Credentials</li>
                 <li><strong>Vercel</strong> - Frontend hosting</li>
             </ol>
-            <p><strong>Estimated time:</strong> 30-45 minutes</p>
+            <div class="alert alert-important">
+                <span class="alert-title">Estimated time</span>
+                30-45 minutes
+            </div>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="part-1">Part 1: Create Supabase Project</h2>
-
-            <h3 id="step-1"><input type="checkbox"> Step 1: Sign up for Supabase</h3>
-            <ol>
-                <li>Go to <a href="https://supabase.com" target="_blank">https://supabase.com</a></li>
-                <li>Click "Start your project"</li>
-                <li>Sign in with GitHub (recommended) or email</li>
-            </ol>
-
-            <h3 id="step-2"><input type="checkbox"> Step 2: Create a new project</h3>
-            <ol>
-                <li>Click "New Project"</li>
-                <li>Fill in the details:
-                    <ul>
-                        <li><strong>Name</strong>: <code>incucyte-analyzer</code> (or your preferred name)</li>
-                        <li><strong>Database Password</strong>: Create a strong password and <strong>save it securely</strong></li>
-                        <li><strong>Region</strong>: Choose the region closest to your users</li>
-                        <li><strong>Pricing Plan</strong>: Free tier is sufficient to start</li>
-                    </ul>
-                </li>
-                <li>Click "Create new project"</li>
-                <li>Wait 2-3 minutes for the project to initialize</li>
-            </ol>
-
-            <h3 id="step-3"><input type="checkbox"> Step 3: Save your project credentials</h3>
-            <ol>
-                <li>In your Supabase project dashboard, click "Settings" (gear icon) in the left sidebar</li>
-                <li>Click "API" under Project Settings</li>
-                <li>You'll see two important values - <strong>copy and save these</strong>:
-                    <ul>
-                        <li><strong>Project URL</strong>: <code>https://xxxxxxxxxxxxx.supabase.co</code></li>
-                        <li><strong>anon public key</strong>: <code>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</code> (long string)</li>
-                    </ul>
-                </li>
-            </ol>
-            <div class="alert alert-warning">
-                <strong>Important:</strong> Keep these values safe - you'll need them later!
+        <section id="part-1">
+            <h2>Part 1: Create Supabase Project</h2>
+            
+            <h3 id="step-1">Step 1: Sign up for Supabase</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>Go to <a href="https://supabase.com" target="_blank">https://supabase.com</a></li>
+                        <li>Click "Start your project"</li>
+                        <li>Sign in with GitHub (recommended) or email</li>
+                    </ol>
+                </div>
             </div>
 
-            <hr>
-
-            <h2 id="part-2">Part 2: Set Up Database</h2>
-
-            <h3 id="step-4"><input type="checkbox"> Step 4: Run database migrations</h3>
-            <ol>
-                <li>In your Supabase project, click "SQL Editor" in the left sidebar</li>
-                <li>Click "New query"</li>
-                <li>Copy and paste the contents of <code>supabase/migrations/001_create_profiles.sql</code> from your project</li>
-                <li>Click "Run" (or press Ctrl+Enter)</li>
-                <li>Repeat for the remaining migration files in order:
-                    <ul>
-                        <li><code>002_create_experiments.sql</code></li>
-                        <li><code>003_first_user_admin_trigger.sql</code></li>
-                        <li><code>004_auto_create_profile.sql</code></li>
-                    </ul>
-                </li>
-            </ol>
-            <div class="alert alert-info">
-                <strong>Tip:</strong> You should see "Success. No rows returned" for each migration.
-            </div>
-
-            <h3 id="step-5"><input type="checkbox"> Step 5: Verify tables were created</h3>
-            <ol>
-                <li>Click "Table Editor" in the left sidebar</li>
-                <li>You should see two tables:
-                    <ul>
-                        <li><code>profiles</code></li>
-                        <li><code>experiments</code></li>
-                    </ul>
-                </li>
-            </ol>
-
-            <hr>
-
-            <h2 id="part-3">Part 3: Configure Azure AD Authentication</h2>
-
-            <h3 id="step-6"><input type="checkbox"> Step 6: Create Azure App Registration</h3>
-            <ol>
-                <li>Go to the <a href="https://portal.azure.com" target="_blank">Azure Portal</a></li>
-                <li>Navigate to <strong>Microsoft Entra ID</strong> (formerly Azure Active Directory)</li>
-                <li>In the left sidebar, click <strong>App registrations</strong></li>
-                <li>Click <strong>+ New registration</strong></li>
-                <li>Fill in the details:
-                    <ul>
-                        <li><strong>Name</strong>: <code>Incucyte Analyzer</code></li>
-                        <li><strong>Supported account types</strong>: Select <strong>"Accounts in this organizational directory only (Single tenant)"</strong>
+            <h3 id="step-2">Step 2: Create a new project</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>Click "New Project"</li>
+                        <li>Fill in the details:
                             <ul>
-                                <li><em>Note: This restricts access to only users within your organization's email domain.</em></li>
+                                <li><strong>Name</strong>: <code>incucyte-analyzer</code> (or your preferred name)</li>
+                                <li><strong>Database Password</strong>: Create a strong password and <strong>save it securely</strong></li>
+                                <li><strong>Region</strong>: Choose the region closest to your users</li>
+                                <li><strong>Pricing Plan</strong>: Free tier is sufficient to start</li>
                             </ul>
                         </li>
-                    </ul>
-                </li>
-                <li>Under <strong>Redirect URI</strong>, select <strong>Web</strong> from the dropdown and enter:
-                    <ul>
-                        <li><code>https://YOUR_SUPABASE_PROJECT_URL/auth/v1/callback</code></li>
-                        <li>Replace <code>YOUR_SUPABASE_PROJECT_URL</code> with your actual Supabase URL from Step 3</li>
-                        <li>Example: <code>https://abcdefghijk.supabase.co/auth/v1/callback</code></li>
-                    </ul>
-                </li>
-                <li>Click <strong>Register</strong></li>
-            </ol>
-
-            <h3 id="step-7"><input type="checkbox"> Step 7: Save Application Credentials</h3>
-            <ol>
-                <li>On the <strong>Overview</strong> page of your new app registration, copy and save the following:
-                    <ul>
-                        <li><strong>Application (client) ID</strong></li>
-                        <li><strong>Directory (tenant) ID</strong></li>
-                    </ul>
-                </li>
-                <li>In the left sidebar, click <strong>Certificates & secrets</strong></li>
-                <li>Click the <strong>Client secrets</strong> tab, then click <strong>+ New client secret</strong></li>
-                <li>Enter a description (e.g., <code>Supabase Auth</code>) and choose an expiry (recommended: 24 months)</li>
-                <li>Click <strong>Add</strong></li>
-                <li><strong>IMPORTANT</strong>: Copy the <strong>Value</strong> (not the Secret ID) immediately. You will not be able to see it again.</li>
-                <li><strong>Note the expiry date</strong> and set a calendar reminder to rotate the secret before it expires.</li>
-            </ol>
-            <div class="alert alert-warning">
-                <strong>IMPORTANT:</strong> Copy the Value immediately. You will not be able to see it again.
+                        <li>Click "Create new project"</li>
+                        <li>Wait 2-3 minutes for the project to initialize</li>
+                    </ol>
+                </div>
             </div>
 
-            <h3 id="step-8"><input type="checkbox"> Step 8: Enable Azure (Microsoft) in Supabase</h3>
-            <ol>
-                <li>Go back to your Supabase project dashboard</li>
-                <li>Click <strong>Authentication</strong> in the left sidebar, then click <strong>Providers</strong></li>
-                <li>Find <strong>Azure (Microsoft)</strong> and toggle it ON</li>
-                <li>Enter your Azure credentials:
-                    <ul>
-                        <li><strong>Client ID</strong>: Paste the Application (client) ID from Step 7</li>
-                        <li><strong>Client Secret</strong>: Paste the Secret Value from Step 7</li>
-                        <li><strong>Azure Tenant URL</strong>: <code>https://login.microsoftonline.com/YOUR_TENANT_ID</code>
+            <h3 id="step-3">Step 3: Save your project credentials</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>In your Supabase project dashboard, click "Settings" (gear icon) in the left sidebar</li>
+                        <li>Click "API" under Project Settings</li>
+                        <li>You'll see two important values - <strong>copy and save these</strong>:
                             <ul>
-                                <li>Replace <code>YOUR_TENANT_ID</code> with the Directory (tenant) ID from Step 7</li>
+                                <li><strong>Project URL</strong>: <code>https://xxxxxxxxxxxxx.supabase.co</code></li>
+                                <li><strong>anon public key</strong>: <code>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</code> (long string)</li>
                             </ul>
                         </li>
-                    </ul>
-                </li>
-                <li>Click <strong>Save</strong></li>
-            </ol>
+                    </ol>
+                    <div class="alert alert-important">
+                        <span class="alert-title">Important</span>
+                        Keep these values safe - you'll need them later!
+                    </div>
+                </div>
+            </div>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="part-4">Part 4: Deploy to Vercel</h2>
+        <section id="part-2">
+            <h2>Part 2: Set Up Database</h2>
 
-            <h3 id="step-9"><input type="checkbox"> Step 9: Push code to GitHub</h3>
-            <ol>
-                <li>If you haven't already, create a GitHub repository for your project</li>
-                <li>Push your code:
-<pre><code>git add .
+            <h3 id="step-4">Step 4: Run database migrations</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>In your Supabase project, click "SQL Editor" in the left sidebar</li>
+                        <li>Click "New query"</li>
+                        <li>Copy and paste the contents of <code>supabase/migrations/001_create_profiles.sql</code> from your project</li>
+                        <li>Click "Run" (or press Ctrl+Enter)</li>
+                        <li>Repeat for the remaining migration files in order:
+                            <ul>
+                                <li><code>002_create_experiments.sql</code></li>
+                                <li><code>003_first_user_admin_trigger.sql</code></li>
+                                <li><code>004_auto_create_profile.sql</code></li>
+                            </ul>
+                        </li>
+                    </ol>
+                    <div class="alert alert-tip">
+                        <span class="alert-title">Tip</span>
+                        You should see "Success. No rows returned" for each migration.
+                    </div>
+                </div>
+            </div>
+
+            <h3 id="step-5">Step 5: Verify tables were created</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>Click "Table Editor" in the left sidebar</li>
+                        <li>You should see two tables:
+                            <ul>
+                                <li><code>profiles</code></li>
+                                <li><code>experiments</code></li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <hr>
+
+        <section id="part-3">
+            <h2>Part 3: Configure Google OAuth Authentication</h2>
+
+            <h3 id="step-6">Step 6: Create Google OAuth Credentials</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>Go to <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a></li>
+                        <li>Create a new project (or select existing)</li>
+                        <li>Navigate to <strong>APIs & Services</strong> &rarr; <strong>OAuth consent screen</strong></li>
+                        <li>Choose <strong>External</strong> user type, click Create</li>
+                        <li>Fill in: App name ("Incucyte Analyzer"), user support email, developer email</li>
+                        <li>Click <strong>Save and Continue</strong> through Scopes and Test Users</li>
+                        <li>Go to <strong>APIs & Services</strong> &rarr; <strong>Credentials</strong></li>
+                        <li>Click <strong>+ Create Credentials</strong> &rarr; <strong>OAuth client ID</strong></li>
+                        <li>Application type: <strong>Web application</strong></li>
+                        <li>Name: "Incucyte Analyzer"</li>
+                        <li>Under <strong>Authorized redirect URIs</strong>, add:
+                            <ul>
+                                <li><code>https://&lt;your-supabase-project-ref&gt;.supabase.co/auth/v1/callback</code></li>
+                                <li><em>Note: Replace <code>&lt;your-supabase-project-ref&gt;</code> with your actual project reference from Step 3.</em></li>
+                            </ul>
+                        </li>
+                        <li>Click <strong>Create</strong></li>
+                        <li>Copy <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+                    </ol>
+                </div>
+            </div>
+
+            <h3 id="step-7">Step 7: Enable Google in Supabase</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>In Supabase Dashboard &rarr; <strong>Authentication</strong> &rarr; <strong>Providers</strong></li>
+                        <li>Find <strong>Google</strong> and toggle it ON</li>
+                        <li>Paste <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+                        <li>Click <strong>Save</strong></li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <hr>
+
+        <section id="part-4">
+            <h2>Part 4: Deploy to Vercel</h2>
+
+            <h3 id="step-9">Step 9: Push code to GitHub</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>If you haven't already, create a GitHub repository for your project</li>
+                        <li>Push your code:
+                            <pre><code>git add .
 git commit -m "Ready for deployment"
 git push origin main</code></pre>
-                </li>
-            </ol>
+                        </li>
+                    </ol>
+                </div>
+            </div>
 
-            <h3 id="step-10"><input type="checkbox"> Step 10: Deploy to Vercel</h3>
-            <ol>
-                <li>Go to <a href="https://vercel.com" target="_blank">https://vercel.com</a></li>
-                <li>Sign in with GitHub</li>
-                <li>Click "Add New" → "Project"</li>
-                <li>Import your GitHub repository</li>
-                <li>Configure the project:
-                    <ul>
-                        <li><strong>Framework Preset</strong>: Vite</li>
-                        <li><strong>Root Directory</strong>: <code>./</code> (leave as default)</li>
-                        <li><strong>Build Command</strong>: <code>npm run build</code> (should be auto-detected)</li>
-                        <li><strong>Output Directory</strong>: <code>dist</code> (should be auto-detected)</li>
-                    </ul>
-                </li>
-            </ol>
+            <h3 id="step-10">Step 10: Deploy to Vercel</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>Go to <a href="https://vercel.com" target="_blank">https://vercel.com</a></li>
+                        <li>Sign in with GitHub</li>
+                        <li>Click "Add New" &rarr; "Project"</li>
+                        <li>Import your GitHub repository</li>
+                        <li>Configure the project:
+                            <ul>
+                                <li><strong>Framework Preset</strong>: Vite</li>
+                                <li><strong>Root Directory</strong>: <code>./</code> (leave as default)</li>
+                                <li><strong>Build Command</strong>: <code>npm run build</code> (should be auto-detected)</li>
+                                <li><strong>Output Directory</strong>: <code>dist</code> (should be auto-detected)</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+            </div>
 
-            <h3 id="step-11"><input type="checkbox"> Step 11: Add Environment Variables</h3>
-            <ol>
-                <li>Before clicking "Deploy", expand "Environment Variables"</li>
-                <li>Add two variables:
-                    <ul>
-                        <li><strong>Name</strong>: <code>VITE_SUPABASE_URL</code><br>
-                            <strong>Value</strong>: Your Supabase Project URL from Step 3</li>
-                        <li><strong>Name</strong>: <code>VITE_SUPABASE_ANON_KEY</code><br>
-                            <strong>Value</strong>: Your Supabase anon key from Step 3</li>
-                    </ul>
-                </li>
-                <li>Click "Deploy"</li>
-                <li>Wait 2-3 minutes for deployment to complete</li>
-            </ol>
+            <h3 id="step-11">Step 11: Add Environment Variables</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>Before clicking "Deploy", expand "Environment Variables"</li>
+                        <li>Add two variables:
+                            <ul>
+                                <li><strong>Name</strong>: <code>VITE_SUPABASE_URL</code><br>
+                                    <strong>Value</strong>: Your Supabase Project URL from Step 3</li>
+                                <li><strong>Name</strong>: <code>VITE_SUPABASE_ANON_KEY</code><br>
+                                    <strong>Value</strong>: Your Supabase anon key from Step 3</li>
+                            </ul>
+                        </li>
+                        <li>Click "Deploy"</li>
+                        <li>Wait 2-3 minutes for deployment to complete</li>
+                    </ol>
+                </div>
+            </div>
 
-            <h3 id="step-12"><input type="checkbox"> Step 12: Update Azure AD redirect URLs</h3>
-            <ol>
-                <li>Copy your Vercel deployment URL (e.g., <code>https://your-project.vercel.app</code>)</li>
-                <li>Go back to the <a href="https://portal.azure.com" target="_blank">Azure Portal</a> → <strong>App registrations</strong> → Your app</li>
-                <li>Click <strong>Authentication</strong> in the left sidebar</li>
-                <li>Under <strong>Web</strong> → <strong>Redirect URIs</strong>, click <strong>Add URI</strong></li>
-                <li>Add your production callback URL:
-                    <ul>
-                        <li><code>https://your-project.vercel.app/auth/callback</code></li>
-                    </ul>
-                </li>
-                <li>(Optional) For local development, add:
-                    <ul>
-                        <li><code>http://localhost:5173/auth/callback</code></li>
-                        <li><em>Note: Azure requires <code>localhost</code>, it does not allow <code>127.0.0.1</code>.</em></li>
-                    </ul>
-                </li>
-                <li>Click <strong>Save</strong> at the top of the page</li>
-            </ol>
+            <h3 id="step-12">Step 12: Update Google OAuth redirect URLs</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>Copy your Vercel deployment URL (e.g., <code>https://your-project.vercel.app</code>)</li>
+                        <li>Go back to the <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a> &rarr; <strong>Credentials</strong> &rarr; Your OAuth client</li>
+                        <li>Under <strong>Authorized redirect URIs</strong>, add your production callback URL:
+                            <ul>
+                                <li><code>https://your-project.vercel.app/auth/callback</code></li>
+                            </ul>
+                        </li>
+                        <li>(Optional) For local development, add:
+                            <ul>
+                                <li><code>http://localhost:5173/auth/callback</code></li>
+                            </ul>
+                        </li>
+                        <li>Click <strong>Save</strong></li>
+                    </ol>
+                </div>
+            </div>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="part-5">Part 5: Test Your Deployment</h2>
+        <section id="part-5">
+            <h2>Part 5: Test Your Deployment</h2>
 
-            <h3 id="step-13"><input type="checkbox"> Step 13: Test the application</h3>
-            <ol>
-                <li>Visit your Vercel URL</li>
-                <li>You should see the Incucyte Analyzer homepage</li>
-                <li>Click <strong>Sign in with Microsoft</strong></li>
-                <li>Complete the Microsoft sign-in flow</li>
-                <li>You should be redirected back to the analyzer</li>
-            </ol>
+            <h3 id="step-13">Step 13: Test the application</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>Visit your Vercel URL</li>
+                        <li>You should see the Incucyte Analyzer homepage</li>
+                        <li>Click <strong>Sign in with Google</strong></li>
+                        <li>Complete the Google sign-in flow</li>
+                        <li>You should be redirected back to the analyzer</li>
+                    </ol>
+                </div>
+            </div>
 
-            <h3 id="step-14"><input type="checkbox"> Step 14: Verify first user is admin</h3>
-            <ol>
-                <li>After signing in, navigate to <code>/admin</code> in your browser</li>
-                <li>You should see the admin panel with your user listed as "admin"</li>
-                <li>If you see this, congratulations! Your first user is automatically an admin.</li>
-            </ol>
+            <h3 id="step-14">Step 14: Verify first user is admin</h3>
+            <div class="step-item">
+                <input type="checkbox">
+                <div class="step-content">
+                    <ol>
+                        <li>After signing in, navigate to <code>/admin</code> in your browser</li>
+                        <li>You should see the admin panel with your user listed as "admin"</li>
+                        <li>If you see this, congratulations! Your first user is automatically an admin.</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="part-6">Part 6: Ongoing Management</h2>
+        <section id="part-6">
+            <h2>Part 6: Ongoing Management</h2>
 
-            <h3 id="adding-users">Adding More Users</h3>
+            <h3>Adding More Users</h3>
             <ul>
                 <li>Share your Vercel URL with other users in your organization</li>
-                <li>They can sign in with their Microsoft/O365 accounts</li>
+                <li>They can sign in with their Google accounts</li>
                 <li>New users will have "user" role by default</li>
                 <li>Admins can change roles in the admin panel</li>
             </ul>
 
-            <h3 id="managing-users">Managing Users (Admin Only)</h3>
+            <h3>Managing Users (Admin Only)</h3>
             <ol>
                 <li>Go to <code>/admin</code> on your deployed site</li>
                 <li>You can:
@@ -624,16 +693,18 @@ git push origin main</code></pre>
                 </li>
             </ol>
 
-            <h3 id="viewing-experiments">Viewing Experiments</h3>
+            <h3>Viewing Experiments</h3>
             <ul>
                 <li>Users can save experiments from the Results page</li>
                 <li>Access saved experiments at <code>/experiments</code></li>
                 <li>Load previous experiments to continue analysis</li>
             </ul>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="troubleshooting">Troubleshooting</h2>
+        <section id="troubleshooting">
+            <h2>Troubleshooting</h2>
 
             <details>
                 <summary>"Missing Supabase environment variables" error</summary>
@@ -641,40 +712,29 @@ git push origin main</code></pre>
                     <p><strong>Problem:</strong> The app shows an error about missing environment variables.</p>
                     <p><strong>Solution:</strong></p>
                     <ol>
-                        <li>Go to Vercel dashboard → Your project → Settings → Environment Variables</li>
+                        <li>Go to Vercel dashboard &rarr; Your project &rarr; Settings &rarr; Environment Variables</li>
                         <li>Verify both <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> are set</li>
-                        <li>Redeploy: Deployments → Click "..." → Redeploy</li>
+                        <li>Redeploy: Deployments &rarr; Click "..." &rarr; Redeploy</li>
                     </ol>
                 </div>
             </details>
 
             <details>
-                <summary>Azure AD SSO not working</summary>
+                <summary>Google OAuth SSO not working</summary>
                 <div class="details-content">
-                    <p><strong>Problem:</strong> Clicking "Sign in with Microsoft" doesn't work or shows an error.</p>
+                    <p><strong>Problem:</strong> Clicking "Sign in with Google" doesn't work or shows an error.</p>
                     <p><strong>Solution:</strong></p>
                     <ol>
-                        <li><strong>Check Redirect URIs</strong>: Verify the redirect URI in Azure Portal matches your Supabase URL or Vercel URL exactly.</li>
-                        <li><strong>Azure Tenant URL</strong>: Ensure the "Azure Tenant URL" in Supabase is set to <code>https://login.microsoftonline.com/&lt;your-tenant-id&gt;</code>.</li>
-                        <li><strong>Localhost vs 127.0.0.1</strong>: Azure requires <code>localhost</code> for local development. Ensure you are not using <code>127.0.0.1</code>.</li>
-                        <li><strong>Client Secret</strong>: Verify the Client Secret Value (not ID) is correct and not expired.</li>
+                        <li><strong>"redirect_uri_mismatch"</strong>: Check that the redirect URIs in Google Cloud Console match your Supabase URL or Vercel URL exactly.</li>
+                        <li><strong>"Access blocked: app has not been verified"</strong>: Add test users in the OAuth consent screen settings or submit the app for verification.</li>
+                        <li><strong>"OAuth consent screen not configured"</strong>: Complete the consent screen setup in Google Cloud Console.</li>
+                        <li><strong>Client Secret</strong>: Verify the Client ID and Client Secret are correct.</li>
                     </ol>
                 </div>
             </details>
 
             <details>
-                <summary>"Application is not configured as a multi-tenant application"</summary>
-                <div class="details-content">
-                    <p><strong>Problem:</strong> Error during sign-in about multi-tenant configuration.</p>
-                    <p><strong>Solution:</strong></p>
-                    <ol>
-                        <li>Ensure you have set the <strong>Azure Tenant URL</strong> in the Supabase Dashboard (Authentication → Providers → Azure). This tells Supabase to use your specific tenant instead of the common multi-tenant endpoint.</li>
-                    </ol>
-                </div>
-            </details>
-
-            <details>
-                <summary>Email not returned from Microsoft</summary>
+                <summary>Email not returned from Google</summary>
                 <div class="details-content">
                     <p><strong>Problem:</strong> User signs in but email is missing or account creation fails.</p>
                     <p><strong>Solution:</strong></p>
@@ -690,8 +750,8 @@ git push origin main</code></pre>
                     <p><strong>Problem:</strong> You want to restrict access to your organization only.</p>
                     <p><strong>Solution:</strong></p>
                     <ol>
-                        <li>Verify the app registration in Azure is set to <strong>"Accounts in this organizational directory only"</strong>.</li>
-                        <li>Ensure the <strong>Azure Tenant URL</strong> is correctly configured in Supabase with your specific Tenant ID.</li>
+                        <li>Use domain restriction in Google Workspace if you have a Workspace account.</li>
+                        <li>Alternatively, you can implement a check in the application to only allow specific email domains.</li>
                     </ol>
                 </div>
             </details>
@@ -702,76 +762,83 @@ git push origin main</code></pre>
                     <p><strong>Problem:</strong> Users can't save experiments or see data.</p>
                     <p><strong>Solution:</strong></p>
                     <ol>
-                        <li>Go to Supabase → SQL Editor</li>
+                        <li>Go to Supabase &rarr; SQL Editor</li>
                         <li>Re-run all migration files in order</li>
-                        <li>Verify RLS is enabled: Go to Table Editor → profiles → Click table → Check "Enable RLS" is ON</li>
+                        <li>Verify RLS is enabled: Go to Table Editor &rarr; profiles &rarr; Click table &rarr; Check "Enable RLS" is ON</li>
                     </ol>
                 </div>
             </details>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="security">Security Best Practices</h2>
+        <section id="security">
+            <h2>Security Best Practices</h2>
             <ol>
                 <li><strong>Never commit <code>.env.local</code></strong> - It contains sensitive credentials</li>
                 <li><strong>Use strong database passwords</strong> - Supabase requires this</li>
-                <li><strong>Rotate Client Secrets</strong> - Set reminders to update Azure secrets before they expire</li>
+                <li><strong>Rotate Client Secrets</strong> - Periodically rotate your Google OAuth client secrets for enhanced security</li>
+                <li><strong>OAuth Consent Screen</strong> - Ensure your OAuth consent screen is verified for production use to avoid "unverified app" warnings</li>
                 <li><strong>Regularly review user access</strong> - Use the admin panel to audit users</li>
             </ol>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="cost">Cost Information</h2>
-            <h3 id="supabase-cost">Supabase Free Tier Includes:</h3>
+        <section id="cost">
+            <h2>Cost Information</h2>
+            <h3>Supabase Free Tier Includes:</h3>
             <ul>
                 <li>500 MB database space</li>
                 <li>1 GB file storage</li>
                 <li>2 GB bandwidth</li>
                 <li>50,000 monthly active users</li>
             </ul>
-
-            <h3 id="vercel-cost">Vercel Free Tier Includes:</h3>
+            <h3>Vercel Free Tier Includes:</h3>
             <ul>
                 <li>Unlimited deployments</li>
                 <li>100 GB bandwidth per month</li>
                 <li>Automatic HTTPS</li>
             </ul>
-            <div class="alert alert-success">
-                <strong>Both services are free for small teams and personal use!</strong>
+            <div class="alert alert-tip">
+                <span class="alert-title">Note</span>
+                Both services are free for small teams and personal use!
             </div>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="help">Getting Help</h2>
+        <section id="help">
+            <h2>Getting Help</h2>
             <ul>
                 <li><strong>Supabase Docs</strong>: <a href="https://supabase.com/docs" target="_blank">https://supabase.com/docs</a></li>
                 <li><strong>Vercel Docs</strong>: <a href="https://vercel.com/docs" target="_blank">https://vercel.com/docs</a></li>
-                <li><strong>Azure AD Docs</strong>: <a href="https://learn.microsoft.com/en-us/entra/identity/" target="_blank">https://learn.microsoft.com/en-us/entra/identity/</a></li>
+                <li><strong>Google OAuth Docs</strong>: <a href="https://developers.google.com/identity/protocols/oauth2" target="_blank">https://developers.google.com/identity/protocols/oauth2</a></li>
             </ul>
+        </section>
 
-            <hr>
+        <hr>
 
-            <h2 id="summary">Summary Checklist</h2>
+        <section id="summary">
+            <h2>Summary Checklist</h2>
             <ul class="checklist">
                 <li><input type="checkbox"> Supabase project created</li>
                 <li><input type="checkbox"> Database migrations run successfully</li>
-                <li><input type="checkbox"> Azure App Registration created</li>
-                <li><input type="checkbox"> Application (client) ID and Tenant ID saved</li>
-                <li><input type="checkbox"> Client secret created and value saved</li>
-                <li><input type="checkbox"> Azure (Microsoft) provider enabled in Supabase</li>
-                <li><input type="checkbox"> Azure Tenant URL configured in Supabase</li>
+                <li><input type="checkbox"> Google Cloud Project created</li>
+                <li><input type="checkbox"> OAuth consent screen configured</li>
+                <li><input type="checkbox"> OAuth client ID and Client Secret saved</li>
+                <li><input type="checkbox"> Google provider enabled in Supabase</li>
                 <li><input type="checkbox"> Code pushed to GitHub</li>
                 <li><input type="checkbox"> Vercel project deployed</li>
                 <li><input type="checkbox"> Environment variables set in Vercel</li>
-                <li><input type="checkbox"> Azure AD redirect URIs updated (Supabase & Vercel)</li>
+                <li><input type="checkbox"> Google OAuth redirect URIs updated (Supabase & Vercel)</li>
                 <li><input type="checkbox"> Application tested and working</li>
                 <li><input type="checkbox"> First user verified as admin</li>
             </ul>
-
-            <div class="alert alert-success" style="margin-top: 2rem;">
-                <strong>Congratulations! Your Incucyte Analyzer is now deployed with Azure AD authentication and database features!</strong>
+            <div class="alert alert-tip" style="margin-top: 2rem;">
+                <strong>Congratulations! Your Incucyte Analyzer is now deployed with Google OAuth authentication and database features!</strong>
             </div>
-        </main>
-    </div>
+        </section>
+    </main>
 </body>
 </html>

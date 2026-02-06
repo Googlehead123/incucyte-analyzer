@@ -4,7 +4,7 @@ This guide will walk you through deploying the Incucyte Wound Healing Analyzer w
 
 ## Prerequisites
 
-- A Microsoft / Azure account (for Azure AD SSO)
+- A Google account (for Google OAuth SSO)
 - A GitHub account (for Vercel deployment)
 - Basic familiarity with web browsers
 
@@ -12,7 +12,7 @@ This guide will walk you through deploying the Incucyte Wound Healing Analyzer w
 
 You'll be setting up:
 1. **Supabase** - Database and authentication backend
-2. **Azure Portal** - Azure AD App Registration
+2. **Google Cloud Console** - Google OAuth Credentials
 3. **Vercel** - Frontend hosting
 
 **Estimated time:** 30-45 minutes
@@ -74,47 +74,32 @@ You'll be setting up:
 
 ---
 
-## Part 3: Configure Azure AD Authentication
+## Part 3: Configure Google OAuth Authentication
 
-### Step 6: Create Azure App Registration
+### Step 6: Create Google OAuth Credentials
 
-1. Go to the [Azure Portal](https://portal.azure.com)
-2. Navigate to **Microsoft Entra ID** (formerly Azure Active Directory)
-3. In the left sidebar, click **App registrations**
-4. Click **+ New registration**
-5. Fill in the details:
-   - **Name**: `Incucyte Analyzer`
-   - **Supported account types**: Select **"Accounts in this organizational directory only (Single tenant)"**
-     - *Note: This restricts access to only users within your organization's email domain.*
-6. Under **Redirect URI**, select **Web** from the dropdown and enter:
-   - `https://YOUR_SUPABASE_PROJECT_URL/auth/v1/callback`
-   - Replace `YOUR_SUPABASE_PROJECT_URL` with your actual Supabase URL from Step 3
-   - Example: `https://abcdefghijk.supabase.co/auth/v1/callback`
-7. Click **Register**
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project (or select existing)
+3. Navigate to **APIs & Services** → **OAuth consent screen**
+4. Choose **External** user type, click Create
+5. Fill in: App name ("Incucyte Analyzer"), user support email, developer email
+6. Click **Save and Continue** through Scopes and Test Users
+7. Go to **APIs & Services** → **Credentials**
+8. Click **+ Create Credentials** → **OAuth client ID**
+9. Application type: **Web application**
+10. Name: "Incucyte Analyzer"
+11. Under **Authorized redirect URIs**, add:
+    - `https://<your-supabase-project-ref>.supabase.co/auth/v1/callback`
+    - *Note: Replace `<your-supabase-project-ref>` with your actual project reference from Step 3.*
+12. Click **Create**
+13. Copy **Client ID** and **Client Secret**
 
-### Step 7: Save Application Credentials
+### Step 7: Enable Google in Supabase
 
-1. On the **Overview** page of your new app registration, copy and save the following:
-   - **Application (client) ID**
-   - **Directory (tenant) ID**
-2. In the left sidebar, click **Certificates & secrets**
-3. Click the **Client secrets** tab, then click **+ New client secret**
-4. Enter a description (e.g., `Supabase Auth`) and choose an expiry (recommended: 24 months)
-5. Click **Add**
-6. **IMPORTANT**: Copy the **Value** (not the Secret ID) immediately. You will not be able to see it again.
-7. **Note the expiry date** and set a calendar reminder to rotate the secret before it expires.
-
-### Step 8: Enable Azure (Microsoft) in Supabase
-
-1. Go back to your Supabase project dashboard
-2. Click **Authentication** in the left sidebar, then click **Providers**
-3. Find **Azure (Microsoft)** and toggle it ON
-4. Enter your Azure credentials:
-   - **Client ID**: Paste the Application (client) ID from Step 7
-   - **Client Secret**: Paste the Secret Value from Step 7
-   - **Azure Tenant URL**: `https://login.microsoftonline.com/YOUR_TENANT_ID`
-     - Replace `YOUR_TENANT_ID` with the Directory (tenant) ID from Step 7
-5. Click **Save**
+1. In Supabase Dashboard → **Authentication** → **Providers**
+2. Find **Google** and toggle it ON
+3. Paste **Client ID** and **Client Secret**
+4. Click **Save**
 
 ---
 
@@ -153,18 +138,15 @@ You'll be setting up:
 3. Click "Deploy"
 4. Wait 2-3 minutes for deployment to complete
 
-### Step 12: Update Azure AD redirect URLs
+### Step 12: Update Google OAuth redirect URLs
 
 1. Copy your Vercel deployment URL (e.g., `https://your-project.vercel.app`)
-2. Go back to the [Azure Portal](https://portal.azure.com) → **App registrations** → Your app
-3. Click **Authentication** in the left sidebar
-4. Under **Web** → **Redirect URIs**, click **Add URI**
-5. Add your production callback URL:
+2. Go back to the [Google Cloud Console](https://console.cloud.google.com) → **Credentials** → Your OAuth client
+3. Under **Authorized redirect URIs**, add your production callback URL:
    - `https://your-project.vercel.app/auth/callback`
-6. (Optional) For local development, add:
+4. (Optional) For local development, add:
    - `http://localhost:5173/auth/callback`
-   - *Note: Azure requires `localhost`, it does not allow `127.0.0.1`.*
-7. Click **Save** at the top of the page
+5. Click **Save**
 
 ---
 
@@ -174,8 +156,8 @@ You'll be setting up:
 
 1. Visit your Vercel URL
 2. You should see the Incucyte Analyzer homepage
-3. Click **Sign in with Microsoft**
-4. Complete the Microsoft sign-in flow
+3. Click **Sign in with Google**
+4. Complete the Google sign-in flow
 5. You should be redirected back to the analyzer
 
 ### Step 14: Verify first user is admin
@@ -191,7 +173,7 @@ You'll be setting up:
 ### Adding More Users
 
 - Share your Vercel URL with other users in your organization
-- They can sign in with their Microsoft/O365 accounts
+- They can sign in with their Google accounts
 - New users will have "user" role by default
 - Admins can change roles in the admin panel
 
@@ -222,24 +204,17 @@ You'll be setting up:
 2. Verify both `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set
 3. Redeploy: Deployments → Click "..." → Redeploy
 
-### Azure AD SSO not working
+### Google OAuth SSO not working
 
-**Problem:** Clicking "Sign in with Microsoft" doesn't work or shows an error.
-
-**Solution:**
-1. **Check Redirect URIs**: Verify the redirect URI in Azure Portal matches your Supabase URL or Vercel URL exactly.
-2. **Azure Tenant URL**: Ensure the "Azure Tenant URL" in Supabase is set to `https://login.microsoftonline.com/<your-tenant-id>`.
-3. **Localhost vs 127.0.0.1**: Azure requires `localhost` for local development. Ensure you are not using `127.0.0.1`.
-4. **Client Secret**: Verify the Client Secret Value (not ID) is correct and not expired.
-
-### "Application is not configured as a multi-tenant application"
-
-**Problem:** Error during sign-in about multi-tenant configuration.
+**Problem:** Clicking "Sign in with Google" doesn't work or shows an error.
 
 **Solution:**
-1. Ensure you have set the **Azure Tenant URL** in the Supabase Dashboard (Authentication → Providers → Azure). This tells Supabase to use your specific tenant instead of the common multi-tenant endpoint.
+1. **"redirect_uri_mismatch"**: Check that the redirect URIs in Google Cloud Console match your Supabase URL or Vercel URL exactly.
+2. **"Access blocked: app has not been verified"**: Add test users in the OAuth consent screen settings or submit the app for verification.
+3. **"OAuth consent screen not configured"**: Complete the consent screen setup in Google Cloud Console.
+4. **Client Secret**: Verify the Client ID and Client Secret are correct.
 
-### Email not returned from Microsoft
+### Email not returned from Google
 
 **Problem:** User signs in but email is missing or account creation fails.
 
@@ -251,8 +226,8 @@ You'll be setting up:
 **Problem:** You want to restrict access to your organization only.
 
 **Solution:**
-1. Verify the app registration in Azure is set to **"Accounts in this organizational directory only"**.
-2. Ensure the **Azure Tenant URL** is correctly configured in Supabase with your specific Tenant ID.
+1. Use domain restriction in Google Workspace if you have a Workspace account.
+2. Alternatively, you can implement a check in the application to only allow specific email domains.
 
 ### "Row Level Security" errors
 
@@ -269,8 +244,9 @@ You'll be setting up:
 
 1. **Never commit `.env.local`** - It contains sensitive credentials
 2. **Use strong database passwords** - Supabase requires this
-3. **Rotate Client Secrets** - Set reminders to update Azure secrets before they expire
-4. **Regularly review user access** - Use the admin panel to audit users
+3. **Rotate Client Secrets** - Periodically rotate your Google OAuth client secrets for enhanced security
+4. **OAuth Consent Screen** - Ensure your OAuth consent screen is verified for production use to avoid "unverified app" warnings
+5. **Regularly review user access** - Use the admin panel to audit users
 
 ---
 
@@ -295,7 +271,7 @@ You'll be setting up:
 
 - **Supabase Docs**: [https://supabase.com/docs](https://supabase.com/docs)
 - **Vercel Docs**: [https://vercel.com/docs](https://vercel.com/docs)
-- **Azure AD Docs**: [https://learn.microsoft.com/en-us/entra/identity/](https://learn.microsoft.com/en-us/entra/identity/)
+- **Google OAuth Docs**: [https://developers.google.com/identity/protocols/oauth2](https://developers.google.com/identity/protocols/oauth2)
 
 ---
 
@@ -303,16 +279,15 @@ You'll be setting up:
 
 - [ ] Supabase project created
 - [ ] Database migrations run successfully
-- [ ] Azure App Registration created
-- [ ] Application (client) ID and Tenant ID saved
-- [ ] Client secret created and value saved
-- [ ] Azure (Microsoft) provider enabled in Supabase
-- [ ] Azure Tenant URL configured in Supabase
+- [ ] Google Cloud Project created
+- [ ] OAuth consent screen configured
+- [ ] OAuth client ID and Client Secret saved
+- [ ] Google provider enabled in Supabase
 - [ ] Code pushed to GitHub
 - [ ] Vercel project deployed
 - [ ] Environment variables set in Vercel
-- [ ] Azure AD redirect URIs updated (Supabase & Vercel)
+- [ ] Google OAuth redirect URIs updated (Supabase & Vercel)
 - [ ] Application tested and working
 - [ ] First user verified as admin
 
-**Congratulations! Your Incucyte Analyzer is now deployed with Azure AD authentication and database features!**
+**Congratulations! Your Incucyte Analyzer is now deployed with Google OAuth authentication and database features!**

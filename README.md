@@ -5,7 +5,7 @@ A web-based application for analyzing wound healing experiments using Incucyte l
 ## Features
 
 - **Wound Healing Analysis**: Upload Incucyte CSV data and perform automated statistical analysis
-- **Microsoft Azure AD Authentication**: Secure login via Azure AD SSO for organization emails
+- **Google OAuth Authentication**: Secure login via Google OAuth through Supabase
 - **User Role Management**: First user becomes admin automatically; admins can manage user roles
 - **Experiment Persistence**: Save and retrieve experiments from PostgreSQL database
 - **Admin Panel**: User management interface for administrators
@@ -55,16 +55,15 @@ npm install
    VITE_SUPABASE_ANON_KEY=your-anon-key
    ```
 
-### 4. Set Up Azure AD Authentication
+### 4. Set Up Google OAuth
 
-1. In Azure Portal ([portal.azure.com](https://portal.azure.com)), go to **Microsoft Entra ID** → **App registrations**
-2. Register a new application with "Accounts in this organizational directory only"
-3. Add redirect URIs:
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → **APIs & Services** → **Credentials**
+2. Create an OAuth 2.0 Client ID (Web application)
+3. Add authorized redirect URIs:
    - Local: `http://localhost:5173/auth/callback`
    - Production: `https://your-domain.com/auth/callback`
-4. Create a client secret under **Certificates & secrets**
-5. In Supabase Dashboard → **Authentication** → **Providers**, enable **Azure (Microsoft)**
-6. Paste your Client ID, Client Secret, and set Azure Tenant URL to `https://login.microsoftonline.com/<your-tenant-id>`
+4. In Supabase Dashboard → **Authentication** → **Providers**, enable **Google**
+5. Paste your Client ID and Client Secret
 
 ### 5. Run Development Server
 
@@ -141,8 +140,8 @@ These should be set in:
 
 ## Authentication Flow
 
-1. User clicks "Sign in with Microsoft"
-2. Redirected to Microsoft login
+1. User clicks "Sign in with Google"
+2. Redirected to Google OAuth consent screen
 3. After approval, redirected to `/auth/callback`
 4. User profile created automatically in PostgreSQL
 5. First user is automatically assigned admin role
