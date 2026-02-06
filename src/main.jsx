@@ -6,6 +6,8 @@ import App from './App.jsx'
 import { AuthProvider } from './contexts/AuthContext'
 import LoginPage from './components/auth/LoginPage'
 import AuthCallback from './components/auth/AuthCallback'
+import ProtectedRoute from './components/auth/ProtectedRoute'
+import AdminPanel from './components/admin/AdminPanel'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -17,7 +19,11 @@ createRoot(document.getElementById('root')).render(
           <Route path="/" element={<App />} />
           <Route path="/analyzer" element={<App />} />
           <Route path="/experiments" element={<div>Experiments Page</div>} />
-          <Route path="/admin" element={<div>Admin Page</div>} />
+          <Route path="/admin" element={
+            <ProtectedRoute adminOnly>
+              <AdminPanel />
+            </ProtectedRoute>
+          } />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
