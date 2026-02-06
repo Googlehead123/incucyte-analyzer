@@ -5,7 +5,7 @@ A web-based application for analyzing wound healing experiments using Incucyte l
 ## Features
 
 - **Wound Healing Analysis**: Upload Incucyte CSV data and perform automated statistical analysis
-- **Google OAuth Authentication**: Secure login via Supabase Google OAuth integration
+- **Microsoft Azure AD Authentication**: Secure login via Azure AD SSO for organization emails
 - **User Role Management**: First user becomes admin automatically; admins can manage user roles
 - **Experiment Persistence**: Save and retrieve experiments from PostgreSQL database
 - **Admin Panel**: User management interface for administrators
@@ -55,14 +55,16 @@ npm install
    VITE_SUPABASE_ANON_KEY=your-anon-key
    ```
 
-### 4. Set Up Google OAuth
+### 4. Set Up Azure AD Authentication
 
-1. In Supabase dashboard, go to **Authentication > Providers**
-2. Enable Google provider
-3. Add your OAuth credentials from Google Cloud Console
-4. Add redirect URLs:
+1. In Azure Portal ([portal.azure.com](https://portal.azure.com)), go to **Microsoft Entra ID** → **App registrations**
+2. Register a new application with "Accounts in this organizational directory only"
+3. Add redirect URIs:
    - Local: `http://localhost:5173/auth/callback`
    - Production: `https://your-domain.com/auth/callback`
+4. Create a client secret under **Certificates & secrets**
+5. In Supabase Dashboard → **Authentication** → **Providers**, enable **Azure (Microsoft)**
+6. Paste your Client ID, Client Secret, and set Azure Tenant URL to `https://login.microsoftonline.com/<your-tenant-id>`
 
 ### 5. Run Development Server
 
@@ -139,8 +141,8 @@ These should be set in:
 
 ## Authentication Flow
 
-1. User clicks "Sign in with Google"
-2. Redirected to Google OAuth consent screen
+1. User clicks "Sign in with Microsoft"
+2. Redirected to Microsoft login
 3. After approval, redirected to `/auth/callback`
 4. User profile created automatically in PostgreSQL
 5. First user is automatically assigned admin role
