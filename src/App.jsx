@@ -8,7 +8,7 @@ import ResultsStep from './components/analyzer/ResultsStep';
 import { CONDITION_COLORS, CHART_THEMES } from './utils/constants';
 import { calculateStats, tTest, calculateAUC, removeMinMax, selectBestTriplicate, parseIncucyteData } from './utils/statistics';
 import { supabase } from './lib/supabase';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from './contexts/useAuth';
 
 function App() {
   const location = useLocation();
@@ -35,7 +35,7 @@ function App() {
   const [xAxisLabel, setXAxisLabel] = useState('Time (hours)');
   const [yAxisLabel, setYAxisLabel] = useState('Relative Wound Density (%)');
   
-  const [timeCourseEndpoint, setTimeCourseEndpoint] = useState(null);
+  const [timeCourseEndpoint] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
@@ -413,7 +413,7 @@ function App() {
     setStep(4);
   }, [rawData, conditions, timepoints, excludedWells, outlierMethod, selectedTimepoint, controlConditionIdx]);
 
-  const barChartData = useMemo(() => {
+  useMemo(() => {
     if (!processedData) return [];
     return conditions.map(condition => ({
       name: condition.name,
@@ -426,13 +426,13 @@ function App() {
     }));
   }, [processedData, conditions, errorBarType]);
 
-  const filteredTimeCourse = useMemo(() => {
+  useMemo(() => {
     if (!processedData) return [];
     if (timeCourseEndpoint === null) return processedData.timeCourse;
     return processedData.timeCourse.filter(row => row.time <= timeCourseEndpoint);
   }, [processedData, timeCourseEndpoint]);
 
-  const exportToPNG = useCallback(async (elementRef, filename) => {
+  useCallback(async (elementRef, filename) => {
     if (!elementRef.current) return;
     setIsExporting(true);
     try {
@@ -446,13 +446,13 @@ function App() {
       link.download = `${filename}.png`;
       link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
-    } catch (error) {
+    } catch {
       alert('Export failed. Please try again.');
     }
     setIsExporting(false);
   }, [theme]);
 
-  const exportToCSV = useCallback(() => {
+  useCallback(() => {
     if (!processedData) return;
     let csv = 'Time (h)';
     conditions.forEach(c => { csv += `,${c.name} Mean,${c.name} SD,${c.name} SEM,${c.name} N`; });
