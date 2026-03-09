@@ -1,5 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import UploadStep from './components/analyzer/UploadStep';
 import PlateMapStep from './components/analyzer/PlateMapStep';
@@ -7,14 +6,36 @@ import ReviewStep from './components/analyzer/ReviewStep';
 import ResultsStep from './components/analyzer/ResultsStep';
 import { CONDITION_COLORS, CHART_THEMES } from './utils/constants';
 import { calculateStats, tTest, calculateAUC, removeMinMax, selectBestTriplicate, parseIncucyteData } from './utils/statistics';
-import { supabase } from './lib/supabase';
-import { useAuth } from './contexts/useAuth';
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <div style={{ textAlign: 'center', maxWidth: '480px', padding: '32px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '12px' }}>Something went wrong</h2>
+            <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '20px' }}>{this.state.error?.message || 'An unexpected error occurred.'}</p>
+            <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+              style={{ padding: '10px 24px', borderRadius: '8px', border: 'none', backgroundColor: '#0891b2', color: 'white', fontWeight: '500', cursor: 'pointer' }}>
+              Reload App
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function App() {
-  const location = useLocation();
-  const { user } = useAuth();
   const [step, setStep] = useState(1);
-  const [experimentId, setExperimentId] = useState(null);
   const [rawData, setRawData] = useState(null);
   const [wells, setWells] = useState([]);
   const [timepoints, setTimepoints] = useState([]);
@@ -30,100 +51,30 @@ function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [chartTheme, setChartTheme] = useState('dark');
-  
+  const [appError, setAppError] = useState(null);
+
   const [figureTitle, setFigureTitle] = useState('Wound Healing Assay Results');
   const [xAxisLabel, setXAxisLabel] = useState('Time (hours)');
   const [yAxisLabel, setYAxisLabel] = useState('Relative Wound Density (%)');
-  
-  const [timeCourseEndpoint] = useState(null);
+
+  const [timeCourseEndpoint, setTimeCourseEndpoint] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
   const [draggedConditionIdx, setDraggedConditionIdx] = useState(null);
   const [dragOverConditionIdx, setDragOverConditionIdx] = useState(null);
-  
+
   const fileInputRef = useRef(null);
   const timeCourseRef = useRef(null);
   const barChartRef = useRef(null);
-  
+
   const theme = CHART_THEMES[chartTheme];
-
-  useEffect(() => {
-    const loadedExperiment = location.state?.experiment;
-    if (loadedExperiment) {
-      setExperimentId(loadedExperiment.id);
-      setFileName(loadedExperiment.file_name || '');
-      setRawData(loadedExperiment.raw_data);
-      setTimepoints(loadedExperiment.timepoints);
-      setConditions(loadedExperiment.conditions);
-      setExcludedWells(new Set(loadedExperiment.excluded_wells || []));
-      setOutlierMethod(loadedExperiment.settings?.outlierMethod || 'none');
-      setErrorBarType(loadedExperiment.settings?.errorBarType || 'sem');
-      setSelectedTimepoint(loadedExperiment.settings?.selectedTimepoint || 24);
-      setControlConditionIdx(loadedExperiment.settings?.controlConditionIdx || 0);
-      setFigureTitle(loadedExperiment.settings?.figureTitle || 'Wound Healing Assay Results');
-      setXAxisLabel(loadedExperiment.settings?.xAxisLabel || 'Time (hours)');
-      setYAxisLabel(loadedExperiment.settings?.yAxisLabel || 'Relative Wound Density (%)');
-      setStep(4);
-    }
-  }, [location.state]);
-
-  const saveExperiment = async () => {
-    if (!user) {
-      alert('Please sign in to save experiments');
-      return;
-    }
-
-    const name = prompt('Enter experiment name:', fileName || 'Untitled Experiment');
-    if (!name) return;
-
-    try {
-      const experimentData = {
-        user_id: user.id,
-        name,
-        file_name: fileName,
-        raw_data: rawData,
-        timepoints,
-        conditions,
-        excluded_wells: Array.from(excludedWells),
-        processed_data: processedData,
-        settings: {
-          outlierMethod,
-          errorBarType,
-          selectedTimepoint,
-          controlConditionIdx,
-          figureTitle,
-          xAxisLabel,
-          yAxisLabel,
-        },
-      };
-
-      if (experimentId) {
-        const { error } = await supabase
-          .from('experiments')
-          .update(experimentData)
-          .eq('id', experimentId);
-        if (error) throw error;
-        alert('Experiment updated successfully!');
-      } else {
-        const { data, error } = await supabase
-          .from('experiments')
-          .insert([experimentData])
-          .select()
-          .single();
-        if (error) throw error;
-        setExperimentId(data.id);
-        alert('Experiment saved successfully!');
-      }
-    } catch (error) {
-      alert(`Error saving experiment: ${error.message}`);
-    }
-  };
 
   const handleFileUpload = useCallback((event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
+    setAppError(null);
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -141,7 +92,7 @@ function App() {
         setSelectedTimepoint(maxTime <= 24 ? maxTime : 24);
         setStep(2);
       } catch (error) {
-        alert('Error parsing file: ' + error.message);
+        setAppError(`Error parsing file: ${error.message}`);
       }
     };
     reader.readAsText(file);
@@ -174,7 +125,7 @@ function App() {
   const assignWellToCondition = useCallback((well, conditionIndex) => {
     setConditions(conditions.map((c, i) => ({
       ...c,
-      wells: i === conditionIndex 
+      wells: i === conditionIndex
         ? (c.wells.includes(well) ? c.wells.filter(w => w !== well) : [...c.wells, well])
         : c.wells.filter(w => w !== well)
     })));
@@ -212,12 +163,12 @@ function App() {
     const start = parseWell(startWell);
     const end = parseWell(endWell);
     if (!start || !end) return [];
-    
+
     const minRow = Math.min(start.rowIdx, end.rowIdx);
     const maxRow = Math.max(start.rowIdx, end.rowIdx);
     const minCol = Math.min(start.col, end.col);
     const maxCol = Math.max(start.col, end.col);
-    
+
     const selectedWells = [];
     for (let r = minRow; r <= maxRow; r++) {
       for (let c = minCol; c <= maxCol; c++) {
@@ -273,7 +224,7 @@ function App() {
     const [moved] = newConditions.splice(fromIdx, 1);
     newConditions.splice(toIdx, 0, moved);
     setConditions(newConditions);
-    
+
     if (activeConditionIdx === fromIdx) {
       setActiveConditionIdx(toIdx);
     } else if (fromIdx < activeConditionIdx && toIdx >= activeConditionIdx) {
@@ -281,7 +232,7 @@ function App() {
     } else if (fromIdx > activeConditionIdx && toIdx <= activeConditionIdx) {
       setActiveConditionIdx(activeConditionIdx + 1);
     }
-    
+
     if (controlConditionIdx === fromIdx) {
       setControlConditionIdx(toIdx);
     } else if (fromIdx < controlConditionIdx && toIdx >= controlConditionIdx) {
@@ -314,8 +265,8 @@ function App() {
 
   const processData = useCallback(() => {
     if (!rawData || conditions.length === 0) return;
-    
-    const results = { 
+
+    const results = {
       timeCourse: [], conditions: [...conditions], statistics: {},
       pValues: {}, auc: {},
       controlName: conditions[controlConditionIdx]?.name || conditions[0]?.name
@@ -332,7 +283,7 @@ function App() {
         conditionWellsMap[condition.name] = activeWells;
       }
     });
-    
+
     timepoints.forEach((time, timeIdx) => {
       const timeData = { time };
       conditions.forEach(condition => {
@@ -349,16 +300,16 @@ function App() {
       });
       results.timeCourse.push(timeData);
     });
-    
+
     const controlCondition = conditions[controlConditionIdx];
-    
+
     if (selectedIdx >= 0) {
       const controlWells = outlierMethod === 'bestTriplicate' ? conditionWellsMap[controlCondition?.name] : controlCondition?.wells.filter(well => !excludedWells.has(well));
       let controlValues = (controlWells || [])
         .map(well => rawData[well]?.[selectedIdx])
         .filter(v => v !== null && v !== undefined && !isNaN(v));
       if (outlierMethod === 'minmax' && controlValues.length > 2) controlValues = removeMinMax(controlValues);
-      
+
       conditions.forEach(condition => {
         const wellsToUse = outlierMethod === 'bestTriplicate' ? conditionWellsMap[condition.name] : condition.wells.filter(well => !excludedWells.has(well));
         let values = wellsToUse
@@ -366,8 +317,8 @@ function App() {
           .filter(v => v !== null && v !== undefined && !isNaN(v));
         if (outlierMethod === 'minmax' && values.length > 2) values = removeMinMax(values);
         results.statistics[condition.name] = calculateStats(values);
-        results.pValues[condition.name] = condition.name !== controlCondition?.name 
-          ? tTest(controlValues, values) 
+        results.pValues[condition.name] = condition.name !== controlCondition?.name
+          ? tTest(controlValues, values)
           : { p: 1, stars: '-', significant: false };
       });
 
@@ -376,7 +327,7 @@ function App() {
         const activeWells = condition.wells.filter(well => !excludedWells.has(well));
         const condMean = results.statistics[condition.name]?.mean;
         if (condMean === undefined || activeWells.length === 0) return;
-        
+
         if (outlierMethod === 'bestTriplicate' && conditionWellsMap[condition.name]) {
           const bestWells = conditionWellsMap[condition.name];
           results.representativeWells[condition.name] = bestWells.map(well => ({
@@ -398,22 +349,22 @@ function App() {
         }
       });
     }
-    
+
     conditions.forEach(condition => {
       const meanValues = results.timeCourse.map(tc => tc[`${condition.name}_mean`] || 0);
       results.auc[condition.name] = calculateAUC(timepoints, meanValues);
     });
-    
+
     const controlAUC = results.auc[controlCondition?.name] || 1;
     conditions.forEach(condition => {
       results.auc[`${condition.name}_relative`] = (results.auc[condition.name] / controlAUC * 100).toFixed(1);
     });
-    
+
     setProcessedData(results);
     setStep(4);
   }, [rawData, conditions, timepoints, excludedWells, outlierMethod, selectedTimepoint, controlConditionIdx]);
 
-  useMemo(() => {
+  const barChartData = useMemo(() => {
     if (!processedData) return [];
     return conditions.map(condition => ({
       name: condition.name,
@@ -426,13 +377,13 @@ function App() {
     }));
   }, [processedData, conditions, errorBarType]);
 
-  useMemo(() => {
+  const filteredTimeCourse = useMemo(() => {
     if (!processedData) return [];
     if (timeCourseEndpoint === null) return processedData.timeCourse;
     return processedData.timeCourse.filter(row => row.time <= timeCourseEndpoint);
   }, [processedData, timeCourseEndpoint]);
 
-  useCallback(async (elementRef, filename) => {
+  const exportToPNG = useCallback(async (elementRef, filename) => {
     if (!elementRef.current) return;
     setIsExporting(true);
     try {
@@ -446,13 +397,13 @@ function App() {
       link.download = `${filename}.png`;
       link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
-    } catch {
-      alert('Export failed. Please try again.');
+    } catch (err) {
+      setAppError(`Export failed: ${err.message}`);
     }
     setIsExporting(false);
   }, [theme]);
 
-  useCallback(() => {
+  const exportToCSV = useCallback(() => {
     if (!processedData) return;
     let csv = 'Time (h)';
     conditions.forEach(c => { csv += `,${c.name} Mean,${c.name} SD,${c.name} SEM,${c.name} N`; });
@@ -528,136 +479,145 @@ function App() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.maxWidth}>
-        <header style={{ marginBottom: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
+    <ErrorBoundary>
+      <div style={styles.container}>
+        <div style={styles.maxWidth}>
+          <header style={{ marginBottom: '32px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div>
+                <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>Incucyte Wound Healing Analyzer</h1>
+                <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Publication-Ready Analysis & Export</p>
+              </div>
             </div>
-            <div>
-              <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>Incucyte Wound Healing Analyzer</h1>
-              <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Publication-Ready Analysis & Export</p>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {[{ num: 1, label: 'Upload' }, { num: 2, label: 'Map Wells' }, { num: 3, label: 'Review' }, { num: 4, label: 'Results' }].map((s, i) => (
+                <React.Fragment key={s.num}>
+                  <button onClick={() => s.num <= step && setStep(s.num)} disabled={s.num > step}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '20px', fontSize: '13px',
+                      border: `1px solid ${step >= s.num ? '#0891b2' : '#334155'}`,
+                      backgroundColor: step === s.num ? 'rgba(8, 145, 178, 0.2)' : 'transparent',
+                      color: step >= s.num ? '#22d3ee' : '#64748b', cursor: s.num <= step ? 'pointer' : 'default' }}>
+                    <span style={{ width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px',
+                      backgroundColor: step >= s.num ? '#0891b2' : '#334155', color: step >= s.num ? 'white' : '#64748b' }}>{s.num}</span>
+                    {s.label}
+                  </button>
+                  {i < 3 && <div style={{ width: '24px', height: '2px', backgroundColor: step > s.num ? 'rgba(8, 145, 178, 0.5)' : '#334155' }} />}
+                </React.Fragment>
+              ))}
             </div>
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {[{ num: 1, label: 'Upload' }, { num: 2, label: 'Map Wells' }, { num: 3, label: 'Review' }, { num: 4, label: 'Results' }].map((s, i) => (
-              <React.Fragment key={s.num}>
-                <button onClick={() => s.num <= step && setStep(s.num)} disabled={s.num > step}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '20px', fontSize: '13px',
-                    border: `1px solid ${step >= s.num ? '#0891b2' : '#334155'}`,
-                    backgroundColor: step === s.num ? 'rgba(8, 145, 178, 0.2)' : 'transparent',
-                    color: step >= s.num ? '#22d3ee' : '#64748b', cursor: s.num <= step ? 'pointer' : 'default' }}>
-                  <span style={{ width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px',
-                    backgroundColor: step >= s.num ? '#0891b2' : '#334155', color: step >= s.num ? 'white' : '#64748b' }}>{s.num}</span>
-                  {s.label}
-                </button>
-                {i < 3 && <div style={{ width: '24px', height: '2px', backgroundColor: step > s.num ? 'rgba(8, 145, 178, 0.5)' : '#334155' }} />}
-              </React.Fragment>
-            ))}
-          </div>
-        </header>
+          </header>
 
-        {step === 1 && (
-          <UploadStep
-            fileInputRef={fileInputRef}
-            handleFileUpload={handleFileUpload}
-            styles={styles}
-          />
-        )}
+          {appError && (
+            <div style={{ marginBottom: '16px', padding: '12px 16px', borderRadius: '8px', backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{appError}</span>
+              <button onClick={() => setAppError(null)} style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: '16px', padding: '0 4px' }}>×</button>
+            </div>
+          )}
 
-        {step === 2 && (
-          <PlateMapStep
-            conditions={conditions}
-            activeConditionIdx={activeConditionIdx}
-            setActiveConditionIdx={setActiveConditionIdx}
-            controlConditionIdx={controlConditionIdx}
-            setControlConditionIdx={setControlConditionIdx}
-            addCondition={addCondition}
-            removeCondition={removeCondition}
-            updateCondition={updateCondition}
-            assignWellToCondition={assignWellToCondition}
-            assignRowToCondition={assignRowToCondition}
-            assignColumnToCondition={assignColumnToCondition}
-            reorderConditions={reorderConditions}
-            getWellCondition={getWellCondition}
-            wells={wells}
-            excludedWells={excludedWells}
-            isDragging={isDragging}
-            dragSelectedWells={dragSelectedWells}
-            handleDragStart={handleDragStart}
-            handleDragEnter={handleDragEnter}
-            handleDragEnd={handleDragEnd}
-            draggedConditionIdx={draggedConditionIdx}
-            setDraggedConditionIdx={setDraggedConditionIdx}
-            dragOverConditionIdx={dragOverConditionIdx}
-            setDragOverConditionIdx={setDragOverConditionIdx}
-            plateGrid={plateGrid}
-            setStep={setStep}
-            styles={styles}
-          />
-        )}
+          {step === 1 && (
+            <UploadStep
+              fileInputRef={fileInputRef}
+              handleFileUpload={handleFileUpload}
+              styles={styles}
+            />
+          )}
 
-        {step === 3 && (
-          <ReviewStep
-            conditions={conditions}
-            excludedWells={excludedWells}
-            toggleExcludedWell={toggleExcludedWell}
-            getWellStats={getWellStats}
-            outlierMethod={outlierMethod}
-            setOutlierMethod={setOutlierMethod}
-            errorBarType={errorBarType}
-            setErrorBarType={setErrorBarType}
-            selectedTimepoint={selectedTimepoint}
-            setSelectedTimepoint={setSelectedTimepoint}
-            timepoints={timepoints}
-            figureTitle={figureTitle}
-            setFigureTitle={setFigureTitle}
-            controlConditionIdx={controlConditionIdx}
-            processData={processData}
-            setStep={setStep}
-            styles={styles}
-          />
-        )}
+          {step === 2 && (
+            <PlateMapStep
+              conditions={conditions}
+              activeConditionIdx={activeConditionIdx}
+              setActiveConditionIdx={setActiveConditionIdx}
+              controlConditionIdx={controlConditionIdx}
+              setControlConditionIdx={setControlConditionIdx}
+              addCondition={addCondition}
+              removeCondition={removeCondition}
+              updateCondition={updateCondition}
+              assignWellToCondition={assignWellToCondition}
+              assignRowToCondition={assignRowToCondition}
+              assignColumnToCondition={assignColumnToCondition}
+              reorderConditions={reorderConditions}
+              getWellCondition={getWellCondition}
+              wells={wells}
+              excludedWells={excludedWells}
+              isDragging={isDragging}
+              dragSelectedWells={dragSelectedWells}
+              handleDragStart={handleDragStart}
+              handleDragEnter={handleDragEnter}
+              handleDragEnd={handleDragEnd}
+              draggedConditionIdx={draggedConditionIdx}
+              setDraggedConditionIdx={setDraggedConditionIdx}
+              dragOverConditionIdx={dragOverConditionIdx}
+              setDragOverConditionIdx={setDragOverConditionIdx}
+              plateGrid={plateGrid}
+              setStep={setStep}
+              styles={styles}
+            />
+          )}
 
-      {step === 4 && processedData && (
-        <ResultsStep
-          processedData={processedData}
-          conditions={conditions}
-          timepoints={timepoints}
-          selectedTimepoint={selectedTimepoint}
-          errorBarType={errorBarType}
-          outlierMethod={outlierMethod}
-          excludedWells={excludedWells}
-          rawData={rawData}
-          controlConditionIdx={controlConditionIdx}
-          figureTitle={figureTitle}
-          xAxisLabel={xAxisLabel}
-          yAxisLabel={yAxisLabel}
-          chartTheme={chartTheme}
-          setChartTheme={setChartTheme}
-          setFigureTitle={setFigureTitle}
-          setXAxisLabel={setXAxisLabel}
-          setYAxisLabel={setYAxisLabel}
-          timeCourseRef={timeCourseRef}
-          barChartRef={barChartRef}
-          isExporting={isExporting}
-          setIsExporting={setIsExporting}
-          showExportPanel={showExportPanel}
-          setShowExportPanel={setShowExportPanel}
-          onBack={() => setStep(3)}
-          onSave={user ? saveExperiment : null}
-        />
-      )}
-        
-        <footer style={{ marginTop: '48px', paddingTop: '16px', borderTop: '1px solid rgba(51, 65, 85, 0.5)', textAlign: 'center' }}>
-          <p style={{ fontSize: '12px', color: '#64748b' }}>Incucyte Wound Healing Analyzer • Publication-Ready Edition</p>
-        </footer>
+          {step === 3 && (
+            <ReviewStep
+              conditions={conditions}
+              excludedWells={excludedWells}
+              toggleExcludedWell={toggleExcludedWell}
+              getWellStats={getWellStats}
+              outlierMethod={outlierMethod}
+              setOutlierMethod={setOutlierMethod}
+              errorBarType={errorBarType}
+              setErrorBarType={setErrorBarType}
+              selectedTimepoint={selectedTimepoint}
+              setSelectedTimepoint={setSelectedTimepoint}
+              timepoints={timepoints}
+              figureTitle={figureTitle}
+              setFigureTitle={setFigureTitle}
+              controlConditionIdx={controlConditionIdx}
+              processData={processData}
+              setStep={setStep}
+              styles={styles}
+            />
+          )}
+
+          {step === 4 && processedData && (
+            <ResultsStep
+              processedData={processedData}
+              conditions={conditions}
+              timepoints={timepoints}
+              selectedTimepoint={selectedTimepoint}
+              errorBarType={errorBarType}
+              outlierMethod={outlierMethod}
+              figureTitle={figureTitle}
+              xAxisLabel={xAxisLabel}
+              yAxisLabel={yAxisLabel}
+              chartTheme={chartTheme}
+              setChartTheme={setChartTheme}
+              showExportPanel={showExportPanel}
+              setShowExportPanel={setShowExportPanel}
+              isExporting={isExporting}
+              exportToPNG={exportToPNG}
+              exportToCSV={exportToCSV}
+              fileName={fileName}
+              timeCourseRef={timeCourseRef}
+              barChartRef={barChartRef}
+              barChartData={barChartData}
+              filteredTimeCourse={filteredTimeCourse}
+              timeCourseEndpoint={timeCourseEndpoint}
+              setTimeCourseEndpoint={setTimeCourseEndpoint}
+              setStep={setStep}
+              styles={styles}
+            />
+          )}
+
+          <footer style={{ marginTop: '48px', paddingTop: '16px', borderTop: '1px solid rgba(51, 65, 85, 0.5)', textAlign: 'center' }}>
+            <p style={{ fontSize: '12px', color: '#64748b' }}>Incucyte Wound Healing Analyzer • Publication-Ready Edition</p>
+          </footer>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
 
