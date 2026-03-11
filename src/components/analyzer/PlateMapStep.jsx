@@ -130,8 +130,15 @@ const PlateMapStep = ({
                     <circle cx="9" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>
                   </svg>
                 </div>
-                <input type="color" value={condition.color} onChange={(e) => updateCondition(idx, { color: e.target.value })} onClick={(e) => e.stopPropagation()}
-                  style={{ width: '28px', height: '28px', border: '2px solid #475569', cursor: 'pointer', borderRadius: '6px', padding: '1px', backgroundColor: 'transparent' }} />
+                <div style={{ position: 'relative', width: '28px', height: '28px', flexShrink: 0 }}>
+                  <div
+                    onClick={(e) => { e.stopPropagation(); e.currentTarget.nextElementSibling.click(); }}
+                    title="Click to change color"
+                    style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: condition.color, border: '2px solid #94a3b8', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(0,0,0,0.3)' }}
+                  />
+                  <input type="color" value={condition.color} onChange={(e) => updateCondition(idx, { color: e.target.value })} onClick={(e) => e.stopPropagation()}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '28px', height: '28px', opacity: 0, cursor: 'pointer' }} />
+                </div>
                 <input type="text" value={condition.name} onChange={(e) => updateCondition(idx, { name: e.target.value })} onClick={(e) => e.stopPropagation()}
                   style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '14px', fontWeight: '500', outline: 'none' }} />
                 {conditions.length > 1 && (
