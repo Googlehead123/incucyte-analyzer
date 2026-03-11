@@ -131,7 +131,7 @@ const PlateMapStep = ({
                   </svg>
                 </div>
                 <input type="color" value={condition.color} onChange={(e) => updateCondition(idx, { color: e.target.value })} onClick={(e) => e.stopPropagation()}
-                  style={{ width: '24px', height: '24px', border: 'none', cursor: 'pointer', borderRadius: '4px' }} />
+                  style={{ width: '28px', height: '28px', border: '2px solid #475569', cursor: 'pointer', borderRadius: '6px', padding: '1px', backgroundColor: 'transparent' }} />
                 <input type="text" value={condition.name} onChange={(e) => updateCondition(idx, { name: e.target.value })} onClick={(e) => e.stopPropagation()}
                   style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '14px', fontWeight: '500', outline: 'none' }} />
                 {conditions.length > 1 && (
