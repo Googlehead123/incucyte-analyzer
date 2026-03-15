@@ -54,8 +54,8 @@ function App() {
   const [appError, setAppError] = useState(null);
 
   const [figureTitle, setFigureTitle] = useState('Wound Healing Assay Results');
-  const [xAxisLabel, setXAxisLabel] = useState('Time (hours)');
-  const [yAxisLabel, setYAxisLabel] = useState('Relative Wound Density (%)');
+  const [xAxisLabel, _setXAxisLabel] = useState('Time (hours)');
+  const [yAxisLabel, _setYAxisLabel] = useState('Relative Wound Density (%)');
 
   const [timeCourseEndpoint, setTimeCourseEndpoint] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
