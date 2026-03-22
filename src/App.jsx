@@ -89,7 +89,11 @@ function App() {
         setExcludedWells(new Set());
         setControlConditionIdx(0);
         const maxTime = Math.max(...result.timepoints);
-        setSelectedTimepoint(maxTime <= 24 ? maxTime : 24);
+        const targetTime = Math.min(maxTime, 24);
+        const nearest = result.timepoints.reduce((prev, curr) =>
+          Math.abs(curr - targetTime) < Math.abs(prev - targetTime) ? curr : prev
+        );
+        setSelectedTimepoint(nearest);
         setStep(2);
       } catch (error) {
         setAppError(`Error parsing file: ${error.message}`);

@@ -100,30 +100,33 @@ export const parseIncucyteData = (text) => {
   }
   
   if (headerIndex === -1) throw new Error('Could not find header row');
-  
-  const wellPattern = /([A-H])(\d+)/;
+
+  const elapsedIdx = headers.findIndex(h => /elapsed/i.test(h));
+  const timeColIdx = elapsedIdx >= 0 ? elapsedIdx : 1;
+
+  const wellPattern = /^([A-H])(\d+)$/;
   const wells = [];
   const wellIndices = {};
-  
+
   headers.forEach((header, idx) => {
     const match = header.match(wellPattern);
     if (match) {
-      const wellName = `${match[1]}${match[2]}`;
+      const wellName = `${match[1]}${parseInt(match[2], 10)}`;
       if (!wells.includes(wellName)) {
         wells.push(wellName);
         wellIndices[wellName] = idx;
       }
     }
   });
-  
+
   const timepoints = [];
   const rawData = {};
   wells.forEach(well => { rawData[well] = []; });
-  
+
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const values = lines[i].split('\t');
     if (values.length < 3) continue;
-    const elapsed = parseFloat(values[1]);
+    const elapsed = parseFloat(values[timeColIdx]);
     if (isNaN(elapsed)) continue;
     timepoints.push(elapsed);
     wells.forEach(well => {
