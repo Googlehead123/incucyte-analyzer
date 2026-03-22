@@ -420,7 +420,8 @@ function App() {
       const stats = processedData.statistics[c.name] || {};
       const pVal = processedData.pValues[c.name] || {};
       const repWells = processedData.representativeWells?.[c.name] || [];
-      csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pVal.p?.toFixed(4) || ''},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''}`;
+      const pDisplay = pVal.p != null ? (pVal.p < 0.0001 ? pVal.p.toExponential(4) : pVal.p.toFixed(4)) : '';
+      csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pDisplay},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''}`;
       for (let i = 0; i < 3; i++) {
         csv += `,${repWells[i]?.well || ''},${repWells[i]?.value?.toFixed(4) || ''}`;
       }

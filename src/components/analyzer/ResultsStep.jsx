@@ -287,7 +287,7 @@ const ResultsStep = ({
                     </td>
                     <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px' }}>{stats.mean?.toFixed(2)} ± {stats[errorBarType]?.toFixed(2)}%</td>
                     <td style={{ textAlign: 'right', padding: '8px', color: '#94a3b8' }}>{stats.n}</td>
-                    <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>{isControl ? '-' : pVal.p?.toFixed(4)}</td>
+                    <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>{isControl ? '-' : pVal.p < 0.0001 ? pVal.p?.toExponential(2) : pVal.p?.toFixed(4)}</td>
                     <td style={{ textAlign: 'center', padding: '8px', color: '#fbbf24', fontWeight: 'bold' }}>{pVal.stars || '-'}</td>
                     <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>
                       {processedData.representativeWells?.[condition.name]?.length > 0

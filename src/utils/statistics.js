@@ -1,3 +1,5 @@
+import jStat from 'jstat';
+
 export const calculateStats = (values) => {
   const filtered = values.filter(v => v !== null && v !== undefined && !isNaN(v));
   if (filtered.length === 0) return { mean: 0, sd: 0, sem: 0, n: 0, values: [] };
@@ -9,57 +11,27 @@ export const calculateStats = (values) => {
   return { mean, sd, sem, n, values: filtered };
 };
 
-const normalCDF = (x) => {
-  const a1 =  0.254829592, a2 = -0.284496736, a3 =  1.421413741;
-  const a4 = -1.453152027, a5 =  1.061405429, p  =  0.3275911;
-  const sign = x < 0 ? -1 : 1;
-  x = Math.abs(x) / Math.sqrt(2);
-  const t = 1.0 / (1.0 + p * x);
-  const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
-  return 0.5 * (1.0 + sign * y);
-};
-
-const tDistributionP = (t, df) => {
-  if (df >= 30) {
-    const z = Math.abs(t);
-    return 2 * (1 - normalCDF(z));
-  }
-  
-  const criticalValues = {
-    0.05: [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228],
-    0.01: [63.657, 9.925, 5.841, 4.604, 4.032, 3.707, 3.499, 3.355, 3.250, 3.169],
-    0.001: [636.619, 31.599, 12.924, 8.610, 6.869, 5.959, 5.408, 5.041, 4.781, 4.587]
-  };
-  
-  const dfIndex = Math.min(Math.floor(df) - 1, 9);
-  if (dfIndex < 0) return 1;
-  
-  const absT = Math.abs(t);
-  if (absT >= criticalValues[0.001][dfIndex]) return 0.001;
-  if (absT >= criticalValues[0.01][dfIndex]) return 0.01;
-  if (absT >= criticalValues[0.05][dfIndex]) return 0.05;
-  return 0.5;
-};
-
 export const tTest = (group1, group2) => {
   const stats1 = calculateStats(group1);
   const stats2 = calculateStats(group2);
-  
-  if (stats1.n < 2 || stats2.n < 2) return { t: 0, p: 1, significant: false };
-  
+
+  if (stats1.n < 2 || stats2.n < 2) return { t: 0, p: 1, df: 0, significant: false, stars: 'ns' };
+
   const n1 = stats1.n, n2 = stats2.n;
   const m1 = stats1.mean, m2 = stats2.mean;
   const v1 = stats1.sd * stats1.sd, v2 = stats2.sd * stats2.sd;
-  
+
   const se = Math.sqrt(v1/n1 + v2/n2);
-  if (se === 0) return { t: 0, p: 1, significant: false };
-  
-  const t = (m1 - m2) / se;
+  if (se === 0) return { t: 0, p: 1, df: 0, significant: false, stars: 'ns' };
+
+  const tStat = (m1 - m2) / se;
   const df = Math.pow(v1/n1 + v2/n2, 2) / (Math.pow(v1/n1, 2)/(n1-1) + Math.pow(v2/n2, 2)/(n2-1));
-  const p = tDistributionP(Math.abs(t), df);
-  
-  return { 
-    t, p, df,
+
+  // Two-tailed p-value using jstat's t-distribution CDF
+  const p = 2 * jStat.studentt.cdf(-Math.abs(tStat), df);
+
+  return {
+    t: tStat, p, df,
     significant: p < 0.05,
     stars: p < 0.001 ? '***' : p < 0.01 ? '**' : p < 0.05 ? '*' : 'ns'
   };
