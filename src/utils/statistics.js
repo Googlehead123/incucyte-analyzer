@@ -119,13 +119,16 @@ export const parseIncucyteData = (text) => {
   const elapsedIdx = headers.findIndex(h => /elapsed/i.test(h));
   const timeColIdx = elapsedIdx >= 0 ? elapsedIdx : 1;
 
-  // Match well names at the start of the header, allowing trailing text
-  // e.g. "A1", "A01", "A1 : Relative Wound Density (%)", "B12: Phase"
-  const wellPattern = /^([A-H])(\d+)/;
+  // Match well names in headers, handling various Incucyte export formats:
+  //   "A1", "A01", "A1 : Relative Wound Density (%)", ": B2", ": B2 (Std Err)"
+  // Skip Std Err columns — only keep the first (data) column per well.
+  const wellPattern = /(?:^|:\s*)([A-H])(\d+)/;
+  const stdErrPattern = /\(Std Err\)/i;
   const wells = [];
   const wellIndices = {};
 
   headers.forEach((header, idx) => {
+    if (stdErrPattern.test(header)) return;
     const match = header.match(wellPattern);
     if (match) {
       const wellName = `${match[1]}${parseInt(match[2], 10)}`;
