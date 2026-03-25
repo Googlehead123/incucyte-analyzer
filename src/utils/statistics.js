@@ -88,23 +88,40 @@ export const selectBestTriplicate = (wells, rawData, timeIdx) => {
 
 export const parseIncucyteData = (text) => {
   const lines = text.split('\n').filter(line => line.trim());
+
+  // Auto-detect delimiter: tab vs comma
+  // Check which delimiter produces more columns on the first few lines
+  const detectDelimiter = (lines) => {
+    for (let i = 0; i < Math.min(lines.length, 10); i++) {
+      const tabCount = (lines[i].match(/\t/g) || []).length;
+      const commaCount = (lines[i].match(/,/g) || []).length;
+      if (tabCount > 2 || commaCount > 2) {
+        return tabCount >= commaCount ? '\t' : ',';
+      }
+    }
+    return '\t';
+  };
+  const delimiter = detectDelimiter(lines);
+
   let headerIndex = -1;
   let headers = [];
-  
+
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes('Elapsed') || lines[i].match(/[A-H]\d+/)) {
       headerIndex = i;
-      headers = lines[i].split('\t').map(h => h.trim());
+      headers = lines[i].split(delimiter).map(h => h.trim());
       break;
     }
   }
-  
+
   if (headerIndex === -1) throw new Error('Could not find header row');
 
   const elapsedIdx = headers.findIndex(h => /elapsed/i.test(h));
   const timeColIdx = elapsedIdx >= 0 ? elapsedIdx : 1;
 
-  const wellPattern = /^([A-H])(\d+)$/;
+  // Match well names at the start of the header, allowing trailing text
+  // e.g. "A1", "A01", "A1 : Relative Wound Density (%)", "B12: Phase"
+  const wellPattern = /^([A-H])(\d+)/;
   const wells = [];
   const wellIndices = {};
 
@@ -124,7 +141,7 @@ export const parseIncucyteData = (text) => {
   wells.forEach(well => { rawData[well] = []; });
 
   for (let i = headerIndex + 1; i < lines.length; i++) {
-    const values = lines[i].split('\t');
+    const values = lines[i].split(delimiter);
     if (values.length < 3) continue;
     const elapsed = parseFloat(values[timeColIdx]);
     if (isNaN(elapsed)) continue;
@@ -135,6 +152,6 @@ export const parseIncucyteData = (text) => {
       rawData[well].push(isNaN(value) ? null : value);
     });
   }
-  
+
   return { wells, timepoints, rawData };
 };
