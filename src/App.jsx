@@ -67,6 +67,7 @@ function App() {
   const fileInputRef = useRef(null);
   const timeCourseRef = useRef(null);
   const barChartRef = useRef(null);
+  const dragHandledRef = useRef(false);
 
   const theme = CHART_THEMES[chartTheme];
 
@@ -210,12 +211,20 @@ function App() {
   const handleDragEnd = useCallback(() => {
     if (isDragging && dragStart && dragEnd) {
       const selectedWells = getWellsInRect(dragStart, dragEnd);
-      assignWellsToCondition(selectedWells, activeConditionIdx);
+      if (selectedWells.length === 1) {
+        // Single-well click: toggle instead of always adding
+        assignWellToCondition(selectedWells[0], activeConditionIdx);
+      } else {
+        assignWellsToCondition(selectedWells, activeConditionIdx);
+      }
+      // Prevent the subsequent click event from double-firing
+      dragHandledRef.current = true;
+      requestAnimationFrame(() => { dragHandledRef.current = false; });
     }
     setIsDragging(false);
     setDragStart(null);
     setDragEnd(null);
-  }, [isDragging, dragStart, dragEnd, getWellsInRect, assignWellsToCondition, activeConditionIdx]);
+  }, [isDragging, dragStart, dragEnd, getWellsInRect, assignWellToCondition, assignWellsToCondition, activeConditionIdx]);
 
   const dragSelectedWells = useMemo(() => {
     if (!isDragging || !dragStart || !dragEnd) return new Set();
@@ -559,6 +568,7 @@ function App() {
               setDraggedConditionIdx={setDraggedConditionIdx}
               dragOverConditionIdx={dragOverConditionIdx}
               setDragOverConditionIdx={setDragOverConditionIdx}
+              dragHandledRef={dragHandledRef}
               plateGrid={plateGrid}
               setStep={setStep}
               styles={styles}

@@ -61,6 +61,7 @@ const PlateMapStep = ({
   setDraggedConditionIdx,
   dragOverConditionIdx,
   setDragOverConditionIdx,
+  dragHandledRef,
   plateGrid,
   setStep,
   styles
@@ -226,7 +227,10 @@ const PlateMapStep = ({
                       isExcluded={excludedWells.has(wellName)}
                       isDragSelected={dragSelectedWells.has(wellName)}
                       activeColor={conditions[activeConditionIdx]?.color || '#22d3ee'}
-                      onClick={() => !isDragging && hasWellData && assignWellToCondition(wellName, activeConditionIdx)}
+                      onClick={() => {
+                        if (dragHandledRef?.current) return;
+                        if (!isDragging && hasWellData) assignWellToCondition(wellName, activeConditionIdx);
+                      }}
                       onMouseDown={(e) => {
                         if (hasWellData) {
                           e.preventDefault();
