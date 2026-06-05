@@ -103,27 +103,46 @@ export const parseIncucyteData = (text) => {
   };
   const delimiter = detectDelimiter(lines);
 
-  let headerIndex = -1;
-  let headers = [];
+  // Match well names in a header field, handling various Incucyte export formats:
+  //   "A1", "A01", "A1 : Relative Wound Density (%)", ": B2", ": B2 (Std Err)", ": G12"
+  // The well token must be anchored to the start of the field or follow a "<colname>:"
+  // separator — this prevents matching stray substrings such as the "E1" inside a job
+  // name like "PLATE1_2", which previously hijacked header detection.
+  const wellPattern = /(?:^|:\s*)([A-H])(\d+)/;
+  const stdErrPattern = /\(Std Err\)/i;
 
+  // Count how many delimited fields in a line look like real well columns.
+  const countWellColumns = (line) =>
+    line.split(delimiter).filter(field => {
+      const f = field.trim();
+      return !stdErrPattern.test(f) && wellPattern.test(f);
+    }).length;
+
+  // Header detection (two passes, most-reliable first):
+  //   1. The canonical Incucyte/CSV header always carries an "Elapsed" column.
+  //   2. Fallback for non-standard exports: the first delimited line with at least
+  //      two distinct well columns. Requiring >=2 means a lone stray match in a
+  //      metadata value can never be mistaken for the header.
+  let headerIndex = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes('Elapsed') || lines[i].match(/[A-H]\d+/)) {
-      headerIndex = i;
-      headers = lines[i].split(delimiter).map(h => h.trim());
-      break;
+    if (/elapsed/i.test(lines[i])) { headerIndex = i; break; }
+  }
+  if (headerIndex === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      if (countWellColumns(lines[i]) >= 2) { headerIndex = i; break; }
     }
   }
 
-  if (headerIndex === -1) throw new Error('Could not find header row');
+  if (headerIndex === -1) {
+    throw new Error('Could not find a data header row (no "Elapsed" column or well columns detected). Is this a valid Incucyte export?');
+  }
+
+  const headers = lines[headerIndex].split(delimiter).map(h => h.trim());
 
   const elapsedIdx = headers.findIndex(h => /elapsed/i.test(h));
   const timeColIdx = elapsedIdx >= 0 ? elapsedIdx : 1;
 
-  // Match well names in headers, handling various Incucyte export formats:
-  //   "A1", "A01", "A1 : Relative Wound Density (%)", ": B2", ": B2 (Std Err)"
-  // Skip Std Err columns — only keep the first (data) column per well.
-  const wellPattern = /(?:^|:\s*)([A-H])(\d+)/;
-  const stdErrPattern = /\(Std Err\)/i;
+  // Extract well columns. Skip Std Err columns — only keep the first (data) column per well.
   const wells = [];
   const wellIndices = {};
 
@@ -138,6 +157,10 @@ export const parseIncucyteData = (text) => {
       }
     }
   });
+
+  if (wells.length === 0) {
+    throw new Error('No well columns found in the header row. The file may not be a supported Incucyte export.');
+  }
 
   const timepoints = [];
   const rawData = {};
