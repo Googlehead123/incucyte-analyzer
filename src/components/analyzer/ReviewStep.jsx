@@ -1,4 +1,5 @@
 import React from 'react';
+import { isEdgeWell, countEdgeWells } from '../../utils/plate';
 
 const Sparkline = ({ data, color }) => {
   if (!data || data.length === 0) return null;
@@ -53,9 +54,12 @@ const ReviewStep = ({
                     <div key={well} onClick={() => toggleExcludedWell(well)}
                       style={{ padding: '12px', borderRadius: '12px', border: '1px solid #475569',
                         backgroundColor: isExcluded ? 'rgba(30, 41, 59, 0.3)' : 'rgba(51, 65, 85, 0.5)', opacity: isExcluded ? 0.5 : 1, cursor: 'pointer' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ fontSize: '13px', fontWeight: '500', color: isExcluded ? '#94a3b8' : condition.color }}>{well}</span>
-                        {isExcluded && <span style={{ fontSize: '9px', padding: '2px 4px', backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', borderRadius: '4px' }}>×</span>}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {isEdgeWell(well) && <span title="Edge well — prone to evaporation/thermal effects" style={{ fontSize: '9px', padding: '2px 4px', backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', borderRadius: '4px' }}>edge</span>}
+                          {isExcluded && <span style={{ fontSize: '9px', padding: '2px 4px', backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', borderRadius: '4px' }}>×</span>}
+                        </span>
                       </div>
                       {stats && (<><Sparkline data={stats.values} color={isExcluded ? '#475569' : condition.color} />
                         <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Final: {stats.finalValue.toFixed(1)}%</div></>)}
@@ -121,6 +125,12 @@ const ReviewStep = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}><span>Conditions:</span><span style={{ color: '#e2e8f0' }}>{conditions.length}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}><span>Timepoints:</span><span style={{ color: '#e2e8f0' }}>{timepoints.length}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}><span>Total wells:</span><span style={{ color: '#e2e8f0' }}>{conditions.reduce((sum, c) => sum + c.wells.length, 0)}</span></div>
+            {(() => {
+              const edgeCount = conditions.reduce((sum, c) => sum + countEdgeWells(c.wells, excludedWells), 0);
+              return edgeCount > 0 ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}><span>Edge wells:</span><span style={{ color: '#fbbf24' }}>{edgeCount}</span></div>
+              ) : null;
+            })()}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Control:</span><span style={{ color: '#4ade80' }}>{conditions[controlConditionIdx]?.name}</span></div>
           </div>
         </div>

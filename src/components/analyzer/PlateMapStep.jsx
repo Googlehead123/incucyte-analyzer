@@ -1,6 +1,7 @@
 import React from 'react';
+import { isEdgeWell, countEdgeWells } from '../../utils/plate';
 
-const WellCell = ({ well, hasData, condition, isExcluded, onClick, onMouseDown, onMouseEnter, onMouseUp, isDragSelected, activeColor }) => {
+const WellCell = ({ well, hasData, condition, isExcluded, onClick, onMouseDown, onMouseEnter, onMouseUp, isDragSelected, activeColor, isEdge }) => {
   const baseStyle = {
     width: '36px',
     height: '36px',
@@ -23,15 +24,21 @@ const WellCell = ({ well, hasData, condition, isExcluded, onClick, onMouseDown, 
   };
 
   return (
-    <button 
-      disabled={!hasData} 
-      onClick={onClick} 
+    <button
+      disabled={!hasData}
+      onClick={onClick}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
       onMouseUp={onMouseUp}
-      style={baseStyle}
-      title={hasData ? `${well}${condition ? ` - ${condition.name}` : ''}${isExcluded ? ' (Excluded)' : ''}` : 'No data'}>
+      style={{ ...baseStyle, position: 'relative' }}
+      title={hasData ? `${well}${isEdge ? ' (edge well)' : ''}${condition ? ` - ${condition.name}` : ''}${isExcluded ? ' (Excluded)' : ''}` : 'No data'}>
       {hasData && well.slice(1)}
+      {hasData && isEdge && (
+        <span
+          aria-hidden="true"
+          style={{ position: 'absolute', top: '2px', right: '2px', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b', boxShadow: '0 0 0 1px rgba(0,0,0,0.3)' }}
+        />
+      )}
     </button>
   );
 };
@@ -66,6 +73,21 @@ const PlateMapStep = ({
   setStep,
   styles
 }) => {
+  // Derive the actually-populated rows/columns so Quick-Assign adapts to the
+  // uploaded layout: middle-60 files show B–G / 2–11, full-plate files show
+  // A–H / 1–12. The App.jsx handlers already drop non-existent wells, so the
+  // ranges only need to be widened here.
+  const presentRows = [...new Set(wells.map(w => w.charAt(0)))].sort();
+  const presentCols = [...new Set(wells.map(w => parseInt(w.slice(1), 10)))].sort((a, b) => a - b);
+  const minCol = presentCols[0];
+  const maxCol = presentCols[presentCols.length - 1];
+  const minRow = presentRows[0];
+  const maxRow = presentRows[presentRows.length - 1];
+  const hasWells = presentRows.length > 0 && presentCols.length > 0;
+
+  // Edge wells currently assigned across all conditions (non-blocking warning).
+  const assignedEdgeCount = conditions.reduce((sum, c) => sum + countEdgeWells(c.wells, excludedWells), 0);
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '24px' }}>
       <div style={styles.card}>
@@ -168,27 +190,29 @@ const PlateMapStep = ({
           </select>
         </div>
         
-        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #334155' }}>
-          <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>Quick Assign: <span style={{ color: '#22d3ee' }}>{conditions[activeConditionIdx]?.name}</span></p>
-          <p style={{ fontSize: '10px', color: '#64748b', marginBottom: '6px' }}>Rows (horizontal)</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-            {['B', 'C', 'D', 'E', 'F', 'G'].map(row => (
-              <button key={row} onClick={() => assignRowToCondition(row, activeConditionIdx, 2, 7)}
-                style={{ padding: '6px', fontSize: '11px', backgroundColor: '#334155', border: 'none', borderRadius: '4px', color: '#e2e8f0', cursor: 'pointer' }}>
-                {row}2-{row}7
-              </button>
-            ))}
+        {hasWells && (
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #334155' }}>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>Quick Assign: <span style={{ color: '#22d3ee' }}>{conditions[activeConditionIdx]?.name}</span></p>
+            <p style={{ fontSize: '10px', color: '#64748b', marginBottom: '6px' }}>Rows (horizontal)</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+              {presentRows.map(row => (
+                <button key={row} onClick={() => assignRowToCondition(row, activeConditionIdx, minCol, maxCol)}
+                  style={{ padding: '6px', fontSize: '11px', backgroundColor: '#334155', border: 'none', borderRadius: '4px', color: '#e2e8f0', cursor: 'pointer' }}>
+                  {minCol === maxCol ? `${row}${minCol}` : `${row}${minCol}-${row}${maxCol}`}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: '10px', color: '#64748b', marginTop: '8px', marginBottom: '6px' }}>Columns (vertical)</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
+              {presentCols.map(col => (
+                <button key={col} onClick={() => assignColumnToCondition(col, activeConditionIdx, minRow, maxRow)}
+                  style={{ padding: '6px', fontSize: '11px', backgroundColor: '#334155', border: 'none', borderRadius: '4px', color: '#e2e8f0', cursor: 'pointer' }}>
+                  {minRow === maxRow ? `${minRow}${col}` : `${minRow}${col}-${maxRow}${col}`}
+                </button>
+              ))}
+            </div>
           </div>
-          <p style={{ fontSize: '10px', color: '#64748b', marginTop: '8px', marginBottom: '6px' }}>Columns (vertical)</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
-            {[2, 3, 4, 5, 6, 7].map(col => (
-              <button key={col} onClick={() => assignColumnToCondition(col, activeConditionIdx, 'B', 'G')}
-                style={{ padding: '6px', fontSize: '11px', backgroundColor: '#334155', border: 'none', borderRadius: '4px', color: '#e2e8f0', cursor: 'pointer' }}>
-                B{col}-G{col}
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
       
       <div style={styles.card}>
@@ -225,6 +249,7 @@ const PlateMapStep = ({
                       hasData={hasWellData} 
                       condition={getWellCondition(wellName)} 
                       isExcluded={excludedWells.has(wellName)}
+                      isEdge={isEdgeWell(wellName)}
                       isDragSelected={dragSelectedWells.has(wellName)}
                       activeColor={conditions[activeConditionIdx]?.color || '#22d3ee'}
                       onClick={() => {
@@ -254,7 +279,14 @@ const PlateMapStep = ({
             </div>
           ))}
         </div>
-        
+
+        {assignedEdgeCount > 0 && (
+          <div style={{ marginTop: '12px', padding: '8px 12px', borderRadius: '8px', backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.4)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#fbbf24' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b', flexShrink: 0 }} />
+            <span>{assignedEdgeCount} edge well{assignedEdgeCount > 1 ? 's' : ''} assigned — edge wells can drift from evaporation/thermal effects. Review or exclude them on the next step.</span>
+          </div>
+        )}
+
         <button onClick={() => setStep(3)} disabled={conditions.every(c => c.wells.length === 0)}
           style={{ width: '100%', marginTop: '16px', ...styles.button, ...styles.primaryButton, opacity: conditions.every(c => c.wells.length === 0) ? 0.5 : 1 }}>
           Continue to Review →
