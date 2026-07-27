@@ -2,7 +2,7 @@
 
 ## Overview: What This Tool Does
 
-This is a **web-based wound healing assay analyzer** that automates the analysis of scratch assay data from the Sartorius Incucyte ZOOM system. Instead of manually processing data in Excel or GraphPad, researchers upload raw export files and get publication-ready figures with statistics in minutes.
+This is a **web-based wound healing assay analyzer** that automates the analysis of scratch assay data from Sartorius Incucyte systems (ZOOM and SX5). Instead of manually processing data in Excel or GraphPad, researchers upload raw export files and get publication-ready figures with statistics in minutes.
 
 ---
 
@@ -21,7 +21,7 @@ This is a **web-based wound healing assay analyzer** that automates the analysis
 
 ### 1. Data Parser
 
-**What it does:** Reads the tab-separated text file exported from Incucyte ZOOM.
+**What it does:** Reads the tab-separated text (or CSV) file exported from Incucyte ZOOM or SX5.
 
 **How it works:**
 
@@ -33,8 +33,12 @@ Date Time    Elapsed    B2         B3         C2         C3
 ```
 
 **The parser:**
-1. Finds the header row (looks for "Elapsed" or well patterns like "B2")
-2. Extracts well names using regex pattern `[A-H]\d+` (matches A1-H12)
+1. Finds the header row — preferring the row carrying an `Elapsed` column, and otherwise
+   the first row with at least two well-shaped columns. (Requiring two matters: an analysis
+   job named `PLATE1_2` contains the substring "E1", and a looser rule once mistook that
+   metadata line for the header and parsed zero wells.)
+2. Extracts well names anchored to the start of a column or to a `:` separator, so stray
+   substrings inside job names cannot be read as wells. `(Std Err)` columns are skipped.
 3. Creates a data structure with wells, timepoints, and raw data values
 
 **Analogy:** Like a translator converting a foreign document into a format your computer can work with.
@@ -191,7 +195,7 @@ AUC = Σ [(tᵢ - tᵢ₋₁) × (vᵢ + vᵢ₋₁)/2]
 > "It's a React web application that parses Incucyte ZOOM exports, performs Welch's t-test for statistical comparison, calculates Area Under Curve for total efficacy, and exports 300 DPI figures in multiple formats. Statistics include mean, SD, SEM, and significance markers. You can choose white backgrounds for publications or dark for presentations."
 
 ### For the Methods Section
-> "Wound healing data was analyzed using the Incucyte Wound Healing Analyzer web application. Relative Wound Density (%) values were exported from Incucyte ZOOM software and processed to calculate mean ± SEM for each condition. Statistical significance was determined using Welch's t-test (two-tailed), with significance thresholds of *p<0.05, **p<0.01, ***p<0.001. Area Under Curve (AUC) was calculated using the trapezoidal method to quantify cumulative wound healing."
+> "Wound healing data was analyzed using the Incucyte Wound Healing Analyzer web application. Relative Wound Density (%) values were exported from Incucyte ZOOM software and processed to calculate mean ± SEM for each condition. Statistical significance was determined using Welch's t-test (two-tailed), with significance thresholds of *p<0.05, **p<0.01, ***p<0.001. Where more than one treatment was compared to the shared control, p-values were adjusted for multiple comparisons (Holm-Sidak); the correction applied is recorded in the exported CSV. Area Under Curve (AUC) was calculated using the trapezoidal method to quantify cumulative wound healing."
 
 ---
 
@@ -262,7 +266,7 @@ Date Time	Elapsed	: B2, Image 1	: B3, Image 1	...
 
 | Issue | Solution |
 |-------|----------|
-| File won't parse | Ensure it's a tab-separated export from Incucyte ZOOM |
+| File won't parse | Ensure it's a tab-separated or CSV export from Incucyte ZOOM/SX5 |
 | No wells detected | Check that well names follow A1-H12 format |
 | Statistics show N=0 | Make sure wells are assigned to conditions |
 | Export is blank | Wait for chart to fully render before exporting |
@@ -276,3 +280,53 @@ MIT License - Free to use, modify, and distribute.
 ---
 
 *Made for the cell biology research community*
+
+---
+
+## Quality Control (added in the SX5 audit)
+
+The Review step now runs automated checks on every assigned well. **Nothing is ever removed
+automatically** — flags are advisory, and you keep the final call.
+
+### Per-well flags
+
+| Flag | Severity | What it means |
+|---|---|---|
+| `earlyJump` | high | The well already reads a high Relative Wound Density in the first quarter of the run. A monolayer cannot close that fast; the wound mask almost certainly failed to find the scratch. |
+| `outOfRange` | high | Values fall outside roughly −25% to 125%. |
+| `noData` | high | No numeric values at all. |
+| `spike` | low | One timepoint jumps away from both its neighbours — a dropped or misfocused frame, not biology. |
+| `sustainedDrop` | low | The curve falls well below its peak *and stays down* — cell detachment, or the mask losing the wound. |
+| `flatline` | low | The wound never closed. |
+| `missing` | low | Some timepoints have no value. |
+
+### Plate-level: failed scans
+
+When the *same* timepoint looks anomalous across a quarter or more of the wells, the imaging
+run is at fault rather than the wells. The Review step says so, because the right response is
+to end the time course before that timepoint (the "Show until" control on the results chart)
+rather than throwing away most of the plate.
+
+### Calibration
+
+Thresholds were tuned against real exports from this lab: two known-good ZOOM plates produce
+**zero flags**, while a compromised SX5 plate flagged 19 of 72 wells as mask failures and
+showed anomalies clustered at six separate timepoints.
+
+## Multiple-comparison correction
+
+Each treatment is tested against the same control, so the tests form a family. Uncorrected,
+running 11 such tests at α=0.05 gives roughly a **43% chance of at least one false positive**.
+
+The Review step offers **None** (default), **Holm–Šidák** and **Bonferroni**. The default is
+None so that analyses run before this option existed reproduce exactly — but the app warns
+when more than two conditions are compared without correction. Stars are always derived from
+the adjusted p-value, and both raw and adjusted values appear in the exported CSV.
+
+## A caution about "Best Triplicate"
+
+Best Triplicate keeps the three wells with the smallest variance. That is a **selection rule,
+not outlier rejection**: it shrinks SD/SEM by construction and makes p-values anti-conservative.
+It is useful for picking representative wells for a figure panel, but if the resulting numbers
+are published the selection must be disclosed. The app now says so in the UI and writes the
+caution into the exported CSV.
