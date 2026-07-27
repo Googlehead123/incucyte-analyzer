@@ -5,7 +5,10 @@ import PlateMapStep from './components/analyzer/PlateMapStep';
 import ReviewStep from './components/analyzer/ReviewStep';
 import ResultsStep from './components/analyzer/ResultsStep';
 import { CONDITION_COLORS, CHART_THEMES } from './utils/constants';
-import { calculateStats, tTest, calculateAUC, removeMinMax, selectBestTriplicate, parseIncucyteData } from './utils/statistics';
+import { parseIncucyteData } from './utils/statistics';
+import { runAnalysis, keyOf, OUTLIER_LABELS } from './utils/analysis';
+import { evaluateWells, countBySeverity, detectScanFailures } from './utils/qc';
+import { buildAnalysisCsv } from './utils/exportCsv';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -42,6 +45,8 @@ function App() {
   const [conditions, setConditions] = useState([]);
   const [excludedWells, setExcludedWells] = useState(new Set());
   const [outlierMethod, setOutlierMethod] = useState('none');
+  // Default 'none' so analyses produced before this option existed reproduce exactly.
+  const [correctionMethod, setCorrectionMethod] = useState('none');
   const [errorBarType, setErrorBarType] = useState('sem');
   const [selectedTimepoint, setSelectedTimepoint] = useState(24);
   const [processedData, setProcessedData] = useState(null);
@@ -77,9 +82,18 @@ function App() {
     setFileName(file.name);
     setAppError(null);
     const reader = new FileReader();
+    reader.onerror = () => {
+      setAppError(`Could not read "${file.name}". The file may be locked by another program or on an unavailable drive.`);
+    };
     reader.onload = (e) => {
       try {
         const result = parseIncucyteData(e.target.result);
+        // A header with no data rows parses "successfully" but leaves nothing to
+        // analyse; catch it here rather than letting the timepoint picker below
+        // fail on an empty array with an opaque message.
+        if (result.timepoints.length === 0) {
+          throw new Error('The header row was found but the file contains no data rows.');
+        }
         setRawData(result.rawData);
         setWells(result.wells);
         setTimepoints(result.timepoints);
@@ -89,6 +103,9 @@ function App() {
         ]);
         setExcludedWells(new Set());
         setControlConditionIdx(0);
+        setProcessedData(null);
+        setTimeCourseEndpoint(null);
+        setActiveConditionIdx(0);
         const maxTime = Math.max(...result.timepoints);
         const targetTime = Math.min(maxTime, 24);
         const nearest = result.timepoints.reduce((prev, curr) =>
@@ -270,6 +287,41 @@ function App() {
     });
   }, []);
 
+  // Advisory QC across every assigned well. Recomputed only when the data or the
+  // assignment changes; excluded wells stay in the report so the reason a well
+  // was dropped remains visible (and lands in the export).
+  const qcReport = useMemo(() => {
+    if (!rawData || timepoints.length === 0) return {};
+    const assigned = [...new Set(conditions.flatMap(c => c.wells))];
+    return evaluateWells(assigned, rawData, timepoints);
+  }, [rawData, conditions, timepoints]);
+
+  const qcCounts = useMemo(() => countBySeverity(qcReport), [qcReport]);
+
+  // Plate-level: an anomaly shared by many wells at the same timepoint is a
+  // failed scan. The fix is to drop that timepoint, not those wells.
+  const scanFailures = useMemo(() => {
+    if (!rawData || timepoints.length === 0) return [];
+    const assigned = [...new Set(conditions.flatMap(c => c.wells))];
+    return detectScanFailures(assigned, rawData, timepoints);
+  }, [rawData, conditions, timepoints]);
+
+  // Wells flagged high-severity that the user has not yet excluded.
+  const unresolvedQcWells = useMemo(
+    () => Object.entries(qcReport)
+      .filter(([well, r]) => r.severity === 'high' && !excludedWells.has(well))
+      .map(([well]) => well),
+    [qcReport, excludedWells]
+  );
+
+  const excludeAllFlaggedWells = useCallback(() => {
+    setExcludedWells(prev => {
+      const next = new Set(prev);
+      unresolvedQcWells.forEach(w => next.add(w));
+      return next;
+    });
+  }, [unresolvedQcWells]);
+
   const getWellStats = useCallback((well) => {
     if (!rawData?.[well]) return null;
     const values = rawData[well].filter(v => v != null);
@@ -277,117 +329,32 @@ function App() {
   }, [rawData]);
 
   const processData = useCallback(() => {
-    if (!rawData || conditions.length === 0) return;
-
-    const results = {
-      timeCourse: [], conditions: [...conditions], statistics: {},
-      pValues: {}, auc: {},
-      controlName: conditions[controlConditionIdx]?.name || conditions[0]?.name
-    };
-
-    const selectedIdx = timepoints.findIndex(t => t === selectedTimepoint);
-
-    const conditionWellsMap = {};
-    conditions.forEach(condition => {
-      const activeWells = condition.wells.filter(well => !excludedWells.has(well));
-      if (outlierMethod === 'bestTriplicate' && activeWells.length > 3 && selectedIdx >= 0) {
-        conditionWellsMap[condition.name] = selectBestTriplicate(activeWells, rawData, selectedIdx);
-      } else {
-        conditionWellsMap[condition.name] = activeWells;
-      }
+    const results = runAnalysis({
+      rawData, conditions, timepoints, excludedWells,
+      outlierMethod, correctionMethod, selectedTimepoint, controlConditionIdx
     });
-
-    timepoints.forEach((time, timeIdx) => {
-      const timeData = { time };
-      conditions.forEach(condition => {
-        const wellsToUse = outlierMethod === 'bestTriplicate' ? conditionWellsMap[condition.name] : condition.wells.filter(well => !excludedWells.has(well));
-        let values = wellsToUse
-          .map(well => rawData[well]?.[timeIdx])
-          .filter(v => v !== null && v !== undefined && !isNaN(v));
-        if (outlierMethod === 'minmax' && values.length > 2) values = removeMinMax(values);
-        const stats = calculateStats(values);
-        timeData[`${condition.name}_mean`] = stats.mean;
-        timeData[`${condition.name}_sd`] = stats.sd;
-        timeData[`${condition.name}_sem`] = stats.sem;
-        timeData[`${condition.name}_n`] = stats.n;
-      });
-      results.timeCourse.push(timeData);
-    });
-
-    const controlCondition = conditions[controlConditionIdx];
-
-    if (selectedIdx >= 0) {
-      const controlWells = outlierMethod === 'bestTriplicate' ? conditionWellsMap[controlCondition?.name] : controlCondition?.wells.filter(well => !excludedWells.has(well));
-      let controlValues = (controlWells || [])
-        .map(well => rawData[well]?.[selectedIdx])
-        .filter(v => v !== null && v !== undefined && !isNaN(v));
-      if (outlierMethod === 'minmax' && controlValues.length > 2) controlValues = removeMinMax(controlValues);
-
-      conditions.forEach(condition => {
-        const wellsToUse = outlierMethod === 'bestTriplicate' ? conditionWellsMap[condition.name] : condition.wells.filter(well => !excludedWells.has(well));
-        let values = wellsToUse
-          .map(well => rawData[well]?.[selectedIdx])
-          .filter(v => v !== null && v !== undefined && !isNaN(v));
-        if (outlierMethod === 'minmax' && values.length > 2) values = removeMinMax(values);
-        results.statistics[condition.name] = calculateStats(values);
-        results.pValues[condition.name] = condition.name !== controlCondition?.name
-          ? tTest(controlValues, values)
-          : { p: 1, stars: '-', significant: false };
-      });
-
-      results.representativeWells = {};
-      conditions.forEach(condition => {
-        const activeWells = condition.wells.filter(well => !excludedWells.has(well));
-        const condMean = results.statistics[condition.name]?.mean;
-        if (condMean === undefined || activeWells.length === 0) return;
-
-        if (outlierMethod === 'bestTriplicate' && conditionWellsMap[condition.name]) {
-          const bestWells = conditionWellsMap[condition.name];
-          results.representativeWells[condition.name] = bestWells.map(well => ({
-            well, value: rawData[well]?.[selectedIdx]
-          }));
-        } else {
-          const wellDiffs = activeWells
-            .map(well => {
-              const val = rawData[well]?.[selectedIdx];
-              if (val === null || val === undefined || isNaN(val)) return null;
-              return { well, value: val, diff: Math.abs(val - condMean) };
-            })
-            .filter(Boolean)
-            .sort((a, b) => a.diff - b.diff)
-            .slice(0, 3);
-          if (wellDiffs.length > 0) {
-            results.representativeWells[condition.name] = wellDiffs.map(w => ({ well: w.well, value: w.value }));
-          }
-        }
-      });
-    }
-
-    conditions.forEach(condition => {
-      const meanValues = results.timeCourse.map(tc => tc[`${condition.name}_mean`] || 0);
-      results.auc[condition.name] = calculateAUC(timepoints, meanValues);
-    });
-
-    const controlAUC = results.auc[controlCondition?.name] || 1;
-    conditions.forEach(condition => {
-      results.auc[`${condition.name}_relative`] = (results.auc[condition.name] / controlAUC * 100).toFixed(1);
-    });
-
+    if (!results) return;
     setProcessedData(results);
     setStep(4);
-  }, [rawData, conditions, timepoints, excludedWells, outlierMethod, selectedTimepoint, controlConditionIdx]);
+  }, [rawData, conditions, timepoints, excludedWells, outlierMethod, selectedTimepoint, controlConditionIdx, correctionMethod]);
 
   const barChartData = useMemo(() => {
     if (!processedData) return [];
-    return conditions.map(condition => ({
-      name: condition.name,
-      value: processedData.statistics[condition.name]?.mean || 0,
-      error: processedData.statistics[condition.name]?.[errorBarType] || 0,
-      fill: condition.color,
-      pValue: processedData.pValues[condition.name]?.p || 1,
-      significance: processedData.pValues[condition.name]?.stars || 'ns',
-      n: processedData.statistics[condition.name]?.n || 0
-    }));
+    return conditions.map(condition => {
+      const k = keyOf(condition);
+      return {
+        name: condition.name,
+        // Distinguish duplicate display names on the axis so two bars labelled
+        // the same are still tellable apart.
+        key: k,
+        value: processedData.statistics[k]?.mean || 0,
+        error: processedData.statistics[k]?.[errorBarType] || 0,
+        fill: condition.color,
+        pValue: processedData.pValues[k]?.p ?? null,
+        significance: processedData.pValues[k]?.stars || 'ns',
+        n: processedData.statistics[k]?.n || 0
+      };
+    });
   }, [processedData, conditions, errorBarType]);
 
   const filteredTimeCourse = useMemo(() => {
@@ -418,49 +385,28 @@ function App() {
 
   const exportToCSV = useCallback(() => {
     if (!processedData) return;
-    let csv = 'Time (h)';
-    conditions.forEach(c => { csv += `,${c.name} Mean,${c.name} SD,${c.name} SEM,${c.name} N`; });
-    csv += '\n';
-    processedData.timeCourse.forEach(row => {
-      csv += row.time;
-      conditions.forEach(c => {
-        csv += `,${row[`${c.name}_mean`]?.toFixed(4) || ''},${row[`${c.name}_sd`]?.toFixed(4) || ''},${row[`${c.name}_sem`]?.toFixed(4) || ''},${row[`${c.name}_n`] || ''}`;
-      });
-      csv += '\n';
-    });
-    csv += `\n\nEndpoint Statistics (t=${selectedTimepoint}h)\nCondition,Mean,SD,SEM,N,p-value,Significance,AUC,Relative AUC (%),Rep. Well 1,Rep. Value 1,Rep. Well 2,Rep. Value 2,Rep. Well 3,Rep. Value 3\n`;
-    conditions.forEach(c => {
-      const stats = processedData.statistics[c.name] || {};
-      const pVal = processedData.pValues[c.name] || {};
-      const repWells = processedData.representativeWells?.[c.name] || [];
-      const pDisplay = pVal.p != null ? (pVal.p < 0.0001 ? pVal.p.toExponential(4) : pVal.p.toFixed(4)) : '';
-      csv += `${c.name},${stats.mean?.toFixed(4) || ''},${stats.sd?.toFixed(4) || ''},${stats.sem?.toFixed(4) || ''},${stats.n || ''},${pDisplay},${pVal.stars || ''},${processedData.auc[c.name]?.toFixed(2) || ''},${processedData.auc[`${c.name}_relative`] || ''}`;
-      for (let i = 0; i < 3; i++) {
-        csv += `,${repWells[i]?.well || ''},${repWells[i]?.value?.toFixed(4) || ''}`;
-      }
-      csv += '\n';
-    });
-    csv += `\n\nRaw Well Data (Time Course)\n`;
-    conditions.forEach(c => {
-      const activeWells = c.wells.filter(w => !excludedWells.has(w));
-      if (activeWells.length === 0) return;
-      csv += `\n${c.name}\n`;
-      csv += `Time (h),${activeWells.join(',')}\n`;
-      timepoints.forEach((time, timeIdx) => {
-        csv += time;
-        activeWells.forEach(well => {
-          const val = rawData[well]?.[timeIdx];
-          csv += `,${val !== null && val !== undefined && !isNaN(val) ? val.toFixed(4) : ''}`;
-        });
-        csv += '\n';
-      });
+    const csv = buildAnalysisCsv({
+      processedData,
+      conditions,
+      timepoints,
+      rawData,
+      excludedWells,
+      selectedTimepoint,
+      outlierMethod: OUTLIER_LABELS[outlierMethod] || outlierMethod,
+      correctionMethod: processedData.correctionMethod,
+      qcReport,
+      keyOf
     });
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    link.href = url;
     link.download = `${fileName.replace(/\.[^/.]+$/, '')}_analyzed.csv`;
     link.click();
-  }, [processedData, conditions, fileName, selectedTimepoint, rawData, timepoints, excludedWells]);
+    // Without this the blob is pinned for the lifetime of the tab; a few dozen
+    // exports in one session is a real leak.
+    URL.revokeObjectURL(url);
+  }, [processedData, conditions, fileName, selectedTimepoint, rawData, timepoints, excludedWells, outlierMethod, qcReport]);
 
   const plateGrid = useMemo(() => ({
     rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
@@ -583,11 +529,18 @@ function App() {
               getWellStats={getWellStats}
               outlierMethod={outlierMethod}
               setOutlierMethod={setOutlierMethod}
+              correctionMethod={correctionMethod}
+              setCorrectionMethod={setCorrectionMethod}
               errorBarType={errorBarType}
               setErrorBarType={setErrorBarType}
               selectedTimepoint={selectedTimepoint}
               setSelectedTimepoint={setSelectedTimepoint}
               timepoints={timepoints}
+              qcReport={qcReport}
+              qcCounts={qcCounts}
+              scanFailures={scanFailures}
+              unresolvedQcWells={unresolvedQcWells}
+              excludeAllFlaggedWells={excludeAllFlaggedWells}
               figureTitle={figureTitle}
               setFigureTitle={setFigureTitle}
               controlConditionIdx={controlConditionIdx}
@@ -605,6 +558,8 @@ function App() {
               selectedTimepoint={selectedTimepoint}
               errorBarType={errorBarType}
               outlierMethod={outlierMethod}
+              keyOf={keyOf}
+              qcReport={qcReport}
               figureTitle={figureTitle}
               xAxisLabel={xAxisLabel}
               yAxisLabel={yAxisLabel}

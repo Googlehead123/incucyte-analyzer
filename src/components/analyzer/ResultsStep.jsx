@@ -110,6 +110,8 @@ const ResultsStep = ({
   timeCourseEndpoint,
   setTimeCourseEndpoint,
   outlierMethod,
+  keyOf,
+  qcReport,
   setStep,
   styles
 }) => {
@@ -175,7 +177,7 @@ const ResultsStep = ({
           </div>
         </div>
         <p style={{ fontSize: '11px', color: theme.tickColor, marginBottom: '16px' }}>
-          Data shown as mean ± {errorBarType.toUpperCase()} (n={processedData.statistics[conditions[0]?.name]?.n || 0})
+          Data shown as mean ± {errorBarType.toUpperCase()} (n={conditions[0] ? (processedData.statistics[keyOf(conditions[0])]?.n || 0) : 0})
         </p>
         <div style={{ height: '420px' }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -194,7 +196,12 @@ const ResultsStep = ({
                 tick={{ fill: theme.tickColor, fontSize: 12, fontFamily: 'Arial, sans-serif' }}
                 tickLine={{ stroke: theme.axisColor }}
                 axisLine={{ stroke: theme.axisColor }}
-                domain={[0, 'auto']}
+                // Relative Wound Density legitimately goes negative when a wound
+                // widens early on. A hard 0 floor silently hid those points.
+                domain={([dataMin, dataMax]) => [
+                  dataMin < 0 ? Math.floor(dataMin / 5) * 5 : 0,
+                  dataMax
+                ]}
                 label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', fill: theme.textColor, fontSize: 13, fontFamily: 'Arial, sans-serif', dx: -10, dy: 0, style: { textAnchor: 'middle' } }}
               />
               <Tooltip content={<CustomTooltip theme={chartTheme} />} />
@@ -205,7 +212,7 @@ const ResultsStep = ({
                 formatter={(value) => <span style={{ color: theme.textColor, fontSize: '12px' }}>{value}</span>}
               />
               {conditions.map(condition => (
-                <Line key={condition.id} type="monotone" dataKey={`${condition.name}_mean`} name={condition.name}
+                <Line key={condition.id} type="monotone" dataKey={`${keyOf(condition)}_mean`} name={condition.name}
                   stroke={condition.color} strokeWidth={2.5} dot={{ fill: condition.color, r: 3, strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} />
               ))}
             </LineChart>
@@ -267,16 +274,22 @@ const ResultsStep = ({
                 <th style={{ textAlign: 'left', padding: '8px' }}>Condition</th>
                 <th style={{ textAlign: 'right', padding: '8px' }}>Mean ± {errorBarType.toUpperCase()}</th>
                 <th style={{ textAlign: 'right', padding: '8px' }}>N</th>
-                <th style={{ textAlign: 'right', padding: '8px' }}>p-value</th>
+                <th style={{ textAlign: 'right', padding: '8px' }}
+                  title={processedData.correctionMethod === 'Uncorrected'
+                    ? 'Raw two-tailed Welch p-value, not adjusted for multiple comparisons'
+                    : `Adjusted for ${processedData.comparisonCount} comparisons (${processedData.correctionMethod}); raw value in parentheses`}>
+                  p-value{processedData.correctionMethod !== 'Uncorrected' && <span style={{ fontSize: '9px', color: '#22d3ee' }}> adj.</span>}
+                </th>
                 <th style={{ textAlign: 'center', padding: '8px' }}>Sig.</th>
                 <th style={{ textAlign: 'right', padding: '8px' }}>Rep. Wells (Top 3)</th>
               </tr>
             </thead>
             <tbody>
               {conditions.map(condition => {
-                const stats = processedData.statistics[condition.name] || {};
-                const pVal = processedData.pValues[condition.name] || {};
-                const isControl = condition.name === processedData.controlName;
+                const k = keyOf(condition);
+                const stats = processedData.statistics[k] || {};
+                const pVal = processedData.pValues[k] || {};
+                const isControl = k === processedData.controlKey;
                 return (
                   <tr key={condition.id} style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.5)' }}>
                     <td style={{ padding: '8px' }}>
@@ -287,11 +300,22 @@ const ResultsStep = ({
                     </td>
                     <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px' }}>{stats.mean?.toFixed(2)} ± {stats[errorBarType]?.toFixed(2)}%</td>
                     <td style={{ textAlign: 'right', padding: '8px', color: '#94a3b8' }}>{stats.n}</td>
-                    <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>{isControl ? '-' : pVal.p < 0.0001 ? pVal.p?.toExponential(2) : pVal.p?.toFixed(4)}</td>
+                    <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>
+                      {isControl ? '-' : (
+                        <>
+                          {pVal.p < 0.0001 ? pVal.p?.toExponential(2) : pVal.p?.toFixed(4)}
+                          {processedData.correctionMethod !== 'Uncorrected' && pVal.pRaw != null && (
+                            <div style={{ fontSize: '10px', color: '#64748b' }}>
+                              raw {pVal.pRaw < 0.0001 ? pVal.pRaw.toExponential(2) : pVal.pRaw.toFixed(4)}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </td>
                     <td style={{ textAlign: 'center', padding: '8px', color: '#fbbf24', fontWeight: 'bold' }}>{pVal.stars || '-'}</td>
                     <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>
-                      {processedData.representativeWells?.[condition.name]?.length > 0
-                        ? processedData.representativeWells[condition.name].map((rw, i) => (
+                      {processedData.representativeWells?.[k]?.length > 0
+                        ? processedData.representativeWells[k].map((rw, i) => (
                             <span key={rw.well}>{i > 0 && ', '}{rw.well} ({rw.value?.toFixed(1)}%)</span>
                           ))
                         : '-'}
@@ -310,8 +334,8 @@ const ResultsStep = ({
                 {conditions.map(condition => (
                   <tr key={condition.id}>
                     <td style={{ padding: '4px', color: condition.color }}>{condition.name}</td>
-                    <td style={{ textAlign: 'right', padding: '4px', fontFamily: 'monospace' }}>{processedData.auc[condition.name]?.toFixed(1)}</td>
-                    <td style={{ textAlign: 'right', padding: '4px', fontFamily: 'monospace', color: '#4ade80' }}>{processedData.auc[`${condition.name}_relative`]}%</td>
+                    <td style={{ textAlign: 'right', padding: '4px', fontFamily: 'monospace' }}>{processedData.auc[keyOf(condition)]?.toFixed(1)}</td>
+                    <td style={{ textAlign: 'right', padding: '4px', fontFamily: 'monospace', color: '#4ade80' }}>{processedData.auc[`${keyOf(condition)}_relative`] != null ? `${processedData.auc[`${keyOf(condition)}_relative`]}%` : 'n/a'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -321,6 +345,18 @@ const ResultsStep = ({
           <div style={{ marginTop: '12px', padding: '12px', backgroundColor: 'rgba(51, 65, 85, 0.3)', borderRadius: '12px', fontSize: '11px', color: '#64748b' }}>
             <div>• Endpoint: {selectedTimepoint}h • Error: {errorBarType.toUpperCase()}</div>
             <div>• Outlier removal: {outlierMethod === 'none' ? 'None' : outlierMethod === 'minmax' ? 'Min/Max' : 'Best Triplicate'} • Test: Welch's t-test</div>
+            <div>
+              • Multiple-comparison correction: {processedData.correctionMethod}
+              {processedData.comparisonCount > 0 && ` (${processedData.comparisonCount} comparison${processedData.comparisonCount > 1 ? 's' : ''})`}
+            </div>
+            {Object.keys(qcReport || {}).length > 0 && (
+              <div>• QC flagged {Object.keys(qcReport).length} well{Object.keys(qcReport).length > 1 ? 's' : ''} — see the exported CSV for details</div>
+            )}
+            {outlierMethod === 'bestTriplicate' && (
+              <div style={{ color: '#fcd34d', marginTop: '4px' }}>
+                ⚠ Best Triplicate is a selection rule; SD/SEM are biased low and p-values are anti-conservative.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -341,7 +377,7 @@ const ResultsStep = ({
                   <td style={{ padding: '8px', fontWeight: '500' }}>{row.time}h</td>
                   {conditions.map(c => (
                     <td key={c.id} style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '11px' }}>
-                      {row[`${c.name}_mean`]?.toFixed(2)} <span style={{ color: '#64748b' }}>± {row[`${c.name}_${errorBarType}`]?.toFixed(2)}</span>
+                      {row[`${keyOf(c)}_mean`]?.toFixed(2)} <span style={{ color: '#64748b' }}>± {row[`${keyOf(c)}_${errorBarType}`]?.toFixed(2)}</span>
                     </td>
                   ))}
                 </tr>
