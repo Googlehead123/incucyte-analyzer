@@ -40,3 +40,8 @@ dist-ssr
 # Note: this hides untracked files only — anything already tracked under
 # .sisyphus/ keeps showing modifications until those are committed.
 .sisyphus/
+
+# Claude Code: transient worktrees and machine-local settings. Deliberately not
+# ignoring all of .claude/ — settings.json is the shareable, checked-in one.
+.claude/worktrees/
+.claude/settings.local.json
