@@ -160,11 +160,44 @@ describe('buildAnalysisCsv', () => {
     expect(build()).not.toContain('Quality-Control Flags');
   });
 
-  it('excludes excluded wells from the raw per-well dump', () => {
-    const csv = build({ excludedWells: new Set(['A2']) });
-    const rawSection = csv.slice(csv.indexOf('Raw Well Data'));
-    expect(rawSection).toContain('A1');
-    expect(rawSection).not.toContain('A2');
+  // The project invariant is that anything dropped stays visible in the export.
+  // The raw dump used to omit excluded wells entirely, so a reader could not tell
+  // an experiment had been filtered at all.
+  describe('excluded wells stay auditable', () => {
+    it('keeps an excluded well in the raw dump, marked as excluded', () => {
+      const csv = build({ excludedWells: new Set(['A2']) });
+      const rawSection = csv.slice(csv.indexOf('Raw Well Data'));
+      expect(rawSection).toContain('A1');
+      expect(rawSection).toContain('A2 (excluded)');
+    });
+
+    it('does not mark wells that were kept', () => {
+      const csv = build({ excludedWells: new Set(['A2']) });
+      const rawSection = csv.slice(csv.indexOf('Raw Well Data'));
+      expect(rawSection).not.toContain('A1 (excluded)');
+    });
+
+    it('lists every excluded well with its condition', () => {
+      const csv = build({ excludedWells: new Set(['A2']) });
+      expect(csv).toContain('Excluded Wells');
+      const section = csv.slice(csv.indexOf('Excluded Wells'), csv.indexOf('Raw Well Data'));
+      expect(section).toContain('A2');
+      expect(section).toContain('Control');
+      expect(section).toContain('No QC flag — excluded manually');
+    });
+
+    it('attributes the QC finding when one exists', () => {
+      const csv = build({
+        excludedWells: new Set(['A2']),
+        qcReport: { A2: { severity: 'high', flags: [{ code: 'earlyJump', message: 'Reads 90% at 2h' }] } },
+      });
+      const section = csv.slice(csv.indexOf('Excluded Wells'), csv.indexOf('Raw Well Data'));
+      expect(section).toContain('Reads 90% at 2h');
+    });
+
+    it('states plainly when nothing was excluded', () => {
+      expect(build()).toContain('None — every assigned well was included.');
+    });
   });
 
   it('emits a trailing newline and no undefined leakage', () => {

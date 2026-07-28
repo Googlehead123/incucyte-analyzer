@@ -108,6 +108,8 @@ export const detectScanFailures = (wells, rawData, timepoints, opts = {}) => {
   const minFraction = opts.minFraction ?? 0.25;
   const counts = new Map();
   const list = wells || [];
+  // spikeDeviation is in RWD percentage points; it means nothing on another scale.
+  if (opts.percentMetric === false) return [];
   list.forEach(well => {
     const series = (rawData?.[well] || []).map(v =>
       v === null || v === undefined || Number.isNaN(v) ? null : v
@@ -135,6 +137,14 @@ export const evaluateWell = (values, timepoints, opts = {}) => {
   const cfg = { ...QC_DEFAULTS, ...opts };
   const flags = [];
 
+  // Every threshold below is calibrated in Relative Wound Density percentage
+  // points, and every message is worded in "%". Run them against a metric on a
+  // different scale — wound width in µm, say — and a perfectly healthy well
+  // reading 700 µm gets flagged "outside the plausible range" and reported as
+  // 700%, inviting the scientist to throw away good data. Only the scale-free
+  // checks apply when the metric is not a percentage.
+  const percentMetric = opts.percentMetric !== false;
+
   const series = (values || []).map(v =>
     v === null || v === undefined || Number.isNaN(v) ? null : v
   );
@@ -156,6 +166,10 @@ export const evaluateWell = (values, timepoints, opts = {}) => {
       severity: QC_SEVERITY.low,
       message: `${series.length - present.length} of ${series.length} timepoints are missing.`,
     });
+  }
+
+  if (!percentMetric) {
+    return { flags, severity: flags.length ? QC_SEVERITY.low : null };
   }
 
   // --- Implausible early jump (the dominant SX5 mask failure) -------------
@@ -252,6 +266,11 @@ export const evaluateWells = (wells, rawData, timepoints, opts = {}) => {
   });
   return report;
 };
+
+/** Advisory shown when QC is running reduced because the metric is not a percentage. */
+export const QC_NON_PERCENT_NOTE =
+  'QC thresholds are calibrated for Relative Wound Density (%). This export uses a ' +
+  'different metric, so only missing-data checks were run.';
 
 export const countBySeverity = (report) => {
   const values = Object.values(report || {});

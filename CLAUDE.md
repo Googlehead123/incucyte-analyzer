@@ -59,14 +59,45 @@ whatever endpoint you give it, so the axis ends up labelled with the data maximu
 picker returns uneven runs like `[-10, 20, 50, 100]`. `computeYAxisScale` in
 `chartAxis.js` chooses the domain and the ticks together; pass both to the axis.
 
-**The y-axis defaults to the full 0–100% scale.** 100% is a closed wound, so a fixed
-scale is what makes two experiments comparable at a glance. "Fit to data" is opt-in per
-session and never changes any computed number. Both charts read the same setting.
+**The y-axis defaults to the full 0–100% scale for percentage metrics.** 100% is a closed
+wound, so a fixed scale is what makes two experiments comparable at a glance. A non-percentage
+metric has no natural ceiling and starts fitted to the data instead (`isPercentMetric`).
+"Fit to data" is opt-in per session and never changes any computed number. Both charts read
+the same setting.
 
-**Parser header detection is fragile by nature.** Job names in the metadata block can contain
-well-shaped substrings (a real export named `PLATE1_2` once hijacked detection via the "E1"
-inside it). Header detection prefers an `Elapsed` column and otherwise requires ≥2 well
-columns. Add a fixture to `src/utils/__tests__/fixtures/` for any new export shape.
+**Absent is `null`, never `0`.** `calculateStats` returns null mean/sd/sem for an empty set,
+and a null sd/sem for n=1 where the sample SD is undefined. A lost frame used to plot as a
+crash to 0% and a condition with no wells drew a flat 0% line; both looked like measurements.
+Anything rendering these must handle null — `fmt()` in `ResultsStep` prints an em dash, and
+`num()` in `exportCsv` writes an empty field.
+
+**Untestable comparisons stay out of the correction family.** `tTest` sets `testable: false`
+(not `p: 1`) when either group has <2 replicates, or when *both* groups have zero variance.
+`runAnalysis` filters those out before adjusting, so an unassigned condition cannot inflate k
+and weaken every real comparison. They report as `n/a`, and `untestedCount` surfaces them in
+the figure footer. One constant group is deliberately still testable — Welch's t is well
+defined there (df collapses to the other group's n−1) and discarding it would throw away a
+real result.
+
+**Absent AUC is `null`.** `calculateAUC` returns null below two measured points. When deriving
+anything from it, guard *both* operands: `null / controlAUC * 100` coerces to 0 and reports a
+confident "0.0% of control" for a condition that has no data at all.
+
+**QC thresholds are calibrated in RWD percentage points.** `evaluateWell` and
+`detectScanFailures` take `percentMetric`; when false they run only the scale-free checks
+(missing data, empty well). Without that, a wound-width export in µm has every healthy well
+flagged "outside the plausible range" and reported as a percentage.
+
+**Only free text goes through `sanitizeCsvText`.** It apostrophe-prefixes `= + - @` so a
+condition named `=Ctrl` renders as text rather than `#NAME?` in Excel. Never run it over
+numbers — it would turn every negative value into `'-5.0000`.
+
+**Parser header detection is fragile by nature.** Everything before the header is free text an
+operator typed, and it has hijacked parsing twice: a job name `PLATE1_2` matched via the "E1"
+inside it, and a `Notes:` value with three commas made a tab-separated export parse as CSV.
+Delimiter and header row are therefore resolved *together* — each delimiter is scored by the
+best header it can find (`findHeaderRow`), never by counting separators in arbitrary lines.
+Add a fixture to `src/utils/__tests__/fixtures/` for any new export shape.
 
 ## Data format notes
 Incucyte exports are tab-separated with a metadata preamble (`Label:`, `Metric:`,
@@ -74,8 +105,9 @@ Incucyte exports are tab-separated with a metadata preamble (`Label:`, `Metric:`
 appear as `: B2` on SX5 and ZOOM, or `A1 : Relative Wound Density (%)` in CSV exports.
 `(Std Err)` columns are skipped. Files use CRLF line endings.
 
-The Y-axis label is hardcoded to "Relative Wound Density (%)"; the `Metric:` header is not
-read. Uploading a Wound Confluence export will plot correctly but be labelled as RWD.
+The `Metric:` header is read on upload and becomes the y-axis label (`(Percent)` is tidied to
+`(%)`), so a Wound Confluence export is labelled as Wound Confluence rather than as RWD. Exports
+with no `Metric:` line fall back to "Relative Wound Density (%)".
 
 ## Deployment
 - GitHub Pages: `npm run deploy` (gh-pages)

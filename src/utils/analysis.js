@@ -79,6 +79,8 @@ export const runAnalysis = ({
     conditions.forEach(condition => {
       const k = keyOf(condition);
       const stats = calculateStats(valuesAt(condition, timeIdx));
+      // null, not 0, when nothing was measured — the line breaks into a gap
+      // instead of dropping to the baseline and reading as a real collapse.
       timeData[`${k}_mean`] = stats.mean;
       timeData[`${k}_sd`] = stats.sd;
       timeData[`${k}_sem`] = stats.sem;
@@ -105,21 +107,33 @@ export const runAnalysis = ({
       }
     });
 
+    // Only comparisons that were actually run belong in the family. A condition
+    // with no wells, or one replicate, cannot be tested — counting it would
+    // inflate k and weaken every genuine comparison beside it.
+    const testable = rawComparisons.filter(c => c.testable);
     const adjusted = adjustPValues(
-      rawComparisons.map(c => ({ key: c.key, p: c.p })),
+      testable.map(c => ({ key: c.key, p: c.p })),
       correctionMethod
     );
-    results.comparisonCount = rawComparisons.length;
+    results.comparisonCount = testable.length;
+    results.untestedCount = rawComparisons.length - testable.length;
 
     conditions.forEach(condition => {
       const k = keyOf(condition);
       if (k === results.controlKey) {
-        results.pValues[k] = { p: null, pRaw: null, stars: '-', significant: false };
+        results.pValues[k] = { p: null, pRaw: null, stars: '-', significant: false, testable: true };
       } else {
         const raw = rawComparisons.find(c => c.key === k);
-        results.pValues[k] = adjusted[k] || {
-          p: raw?.p, pRaw: raw?.p, stars: 'ns', significant: false
-        };
+        if (raw && !raw.testable) {
+          results.pValues[k] = {
+            p: null, pRaw: null, stars: 'n/a', significant: false,
+            testable: false, reason: raw.reason,
+          };
+        } else {
+          results.pValues[k] = adjusted[k] || {
+            p: raw?.p ?? null, pRaw: raw?.p ?? null, stars: 'ns', significant: false, testable: true
+          };
+        }
       }
     });
 
@@ -128,7 +142,9 @@ export const runAnalysis = ({
       const k = keyOf(condition);
       const activeWells = condition.wells.filter(well => !excludedWells.has(well));
       const condMean = results.statistics[k]?.mean;
-      if (condMean === undefined || activeWells.length === 0) return;
+      // `== null` catches the no-data case too, now that an unmeasured condition
+      // reports a null mean rather than 0.
+      if (condMean == null || activeWells.length === 0) return;
 
       if (outlierMethod === 'bestTriplicate' && conditionWellsMap[k]) {
         results.representativeWells[k] = conditionWellsMap[k].map(well => ({
@@ -165,11 +181,13 @@ export const runAnalysis = ({
   const controlAUC = results.auc[results.controlKey];
   conditions.forEach(condition => {
     const k = keyOf(condition);
-    // A zero/absent control AUC makes the ratio meaningless — report it as
-    // unavailable rather than silently dividing by a placeholder 1.
+    const auc = results.auc[k];
+    // Both ends have to be real numbers. Guarding only the denominator let a null
+    // numerator coerce to 0 in the division, so a condition with no data at all
+    // reported a confident "0.0%" of control instead of "n/a".
     results.auc[`${k}_relative`] =
-      typeof controlAUC === 'number' && controlAUC !== 0
-        ? (results.auc[k] / controlAUC * 100).toFixed(1)
+      typeof auc === 'number' && typeof controlAUC === 'number' && controlAUC !== 0
+        ? (auc / controlAUC * 100).toFixed(1)
         : null;
   });
 
