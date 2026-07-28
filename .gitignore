@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
 
 # Editor directories and files
 .vscode/*
@@ -25,3 +26,22 @@ dist-ssr
 
 # Playwright MCP scratch output
 .playwright-mcp
+
+# Scratch Incucyte exports and verification screenshots dropped at the repo root
+# while working. Anchored with a leading slash so this only covers the root: real
+# exports that a test depends on are committed under
+# src/utils/__tests__/fixtures/ and stay tracked.
+/*.txt
+/*.csv
+/*.tsv
+/*.png
+
+# Sisyphus agent working state (notepads, drafts, evidence screenshots).
+# Note: this hides untracked files only — anything already tracked under
+# .sisyphus/ keeps showing modifications until those are committed.
+.sisyphus/
+
+# Claude Code: transient worktrees and machine-local settings. Deliberately not
+# ignoring all of .claude/ — settings.json is the shareable, checked-in one.
+.claude/worktrees/
+.claude/settings.local.json

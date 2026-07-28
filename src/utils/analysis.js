@@ -130,9 +130,13 @@ export const runAnalysis = ({
             testable: false, reason: raw.reason,
           };
         } else {
-          results.pValues[k] = adjusted[k] || {
-            p: raw?.p ?? null, pRaw: raw?.p ?? null, stars: 'ns', significant: false, testable: true
-          };
+          // `testable` is spread on explicitly: adjustPValues returns only the
+          // p-value fields, so without this a successful comparison came back with
+          // testable === undefined while every other branch set it. Consumers
+          // testing `if (pValues[k].testable)` would have read that as untestable.
+          results.pValues[k] = adjusted[k]
+            ? { ...adjusted[k], testable: true }
+            : { p: raw?.p ?? null, pRaw: raw?.p ?? null, stars: 'ns', significant: false, testable: true };
         }
       }
     });
