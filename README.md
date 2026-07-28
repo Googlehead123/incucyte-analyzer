@@ -1,169 +1,113 @@
 # Incucyte Wound Healing Analyzer
 
-A web-based application for analyzing wound healing experiments using Incucyte live-cell imaging data. This tool provides statistical analysis, visualization, and data persistence for wound healing assays.
+Analysis and publication-ready figures for wound healing (scratch) assays from Incucyte
+live-cell imaging. Upload an export, map wells to conditions, review quality flags, get
+statistics and charts.
+
+Live: **https://googlehead123.github.io/incucyte-analyzer/**
+
+Supports exports from **Incucyte ZOOM** and **Incucyte SX5**. 96-well plates (rows A–H,
+columns 1–12).
+
+## Everything runs in your browser
+
+There is **no backend, no database and no accounts**. The file you pick is parsed in the
+page and never leaves your machine — nothing is uploaded anywhere. That is a deliberate
+property of this tool, not a missing feature: unpublished plate data stays on the instrument
+PC, and there is no server to secure or credentials to manage.
+
+The corollary is that nothing persists. Closing the tab discards the session, so export
+anything you want to keep.
 
 ## Features
 
-- **Wound Healing Analysis**: Upload Incucyte CSV data and perform automated statistical analysis
-- **Google OAuth Authentication**: Secure login via Google OAuth through Supabase
-- **User Role Management**: First user becomes admin automatically; admins can manage user roles
-- **Experiment Persistence**: Save and retrieve experiments from PostgreSQL database
-- **Admin Panel**: User management interface for administrators
-- **Data Visualization**: Interactive charts and statistical summaries using Recharts
-- **Export Capabilities**: Download analyzed data as CSV or PNG charts
+- **Parses real Incucyte exports** — tab-separated ZOOM/SX5 and CSV, handling the metadata
+  preamble, `(Std Err)` columns and CRLF endings
+- **Plate map** — click or drag to assign wells to conditions; row/column quick-assign
+- **Automated QC** — flags wells whose wound mask likely failed (implausible early closure,
+  single-frame dropouts, sustained collapse, flatlines) and detects plate-wide failed scans.
+  Advisory only: nothing is removed unless you say so
+- **Statistics** — Welch's t-test against a chosen control, with optional Holm–Šidák or
+  Bonferroni correction for multiple comparisons; AUC; SD/SEM error bars
+- **Charts** — time course and endpoint comparison, significance stars, three export themes
+- **Export** — PNG at 3× scale, and a CSV carrying the statistics, the QC findings, every
+  excluded well, and the exact settings used, so a figure can be traced back to its analysis
 
-## Tech Stack
-
-- **Frontend**: React 19 + Vite 7 (SPA)
-- **Backend**: Supabase (PostgreSQL + Auth)
-- **Routing**: react-router-dom
-- **Visualization**: Recharts
-- **Styling**: CSS-in-JS with theme support
-
-## Prerequisites
+## Requirements
 
 - Node.js 20.19+ or 22.12+
-- npm or yarn
-- Supabase account (free tier available)
-- Vercel account (for deployment)
+- npm
 
-## Local Development Setup
-
-### 1. Clone the Repository
+## Getting started
 
 ```bash
 git clone <repository-url>
 cd incucyte-analyzer
-```
-
-### 2. Install Dependencies
-
-```bash
 npm install
+npm run dev          # http://localhost:5173/incucyte-analyzer/
 ```
 
-### 3. Configure Supabase
+No configuration and no environment variables — the app reads none.
 
-1. Create a new Supabase project at [supabase.com](https://supabase.com)
-2. Copy `.env.example` to `.env.local`:
-   ```bash
-   cp .env.example .env.local
-   ```
-3. Fill in your Supabase credentials:
-   ```
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-anon-key
-   ```
+## Scripts
 
-### 4. Set Up Google OAuth
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Dev server with HMR |
+| `npm run build` | Production build → `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm test` | Vitest, single run |
+| `npm run test:watch` | Vitest, watch mode |
+| `npm run lint` | ESLint |
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com) → **APIs & Services** → **Credentials**
-2. Create an OAuth 2.0 Client ID (Web application)
-3. Add authorized redirect URIs:
-   - Local: `http://localhost:5173/auth/callback`
-   - Production: `https://your-domain.com/auth/callback`
-4. In Supabase Dashboard → **Authentication** → **Providers**, enable **Google**
-5. Paste your Client ID and Client Secret
+## Tech stack
 
-### 5. Run Development Server
+React 19 + Vite · Recharts for charts · jstat for the t-distribution · html2canvas for PNG
+export · Vitest for tests. JavaScript throughout, no TypeScript.
 
-```bash
-npm run dev
-```
-
-The app will be available at `http://localhost:5173`
-
-## Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run lint` - Run ESLint
-- `npm run preview` - Preview production build locally
-
-## Project Structure
+## Project structure
 
 ```
 src/
-├── components/
-│   ├── auth/              # Authentication components
-│   │   ├── LoginPage.jsx
-│   │   ├── AuthCallback.jsx
-│   │   └── ProtectedRoute.jsx
-│   ├── admin/             # Admin panel
-│   │   └── AdminPanel.jsx
-│   └── analyzer/          # Analysis workflow components
-│       ├── UploadStep.jsx
-│       ├── PlateMapStep.jsx
-│       ├── ReviewStep.jsx
-│       └── ResultsStep.jsx
-├── contexts/
-│   ├── AuthContext.jsx    # Auth provider
-│   └── useAuth.js         # Auth hook
-├── lib/
-│   └── supabase.js        # Supabase client
-├── pages/
-│   └── ExperimentsPage.jsx # Saved experiments
-├── App.jsx                # Main analyzer app
-└── main.jsx               # Entry point
+├── App.jsx                       workflow state, well assignment, analysis orchestration
+├── main.jsx                      entry point
+├── components/analyzer/          the four workflow steps
+│   ├── UploadStep.jsx
+│   ├── PlateMapStep.jsx
+│   ├── ReviewStep.jsx            per-well QC review and analysis settings
+│   └── ResultsStep.jsx           charts, statistics tables, export
+└── utils/
+    ├── statistics.js             export parser, descriptive stats, Welch's t-test, AUC
+    ├── analysis.js               the analysis pipeline, as a pure testable function
+    ├── multipleComparisons.js    Holm–Šidák / Bonferroni adjustment
+    ├── qc.js                     per-well QC flags, plate-level scan-failure detection
+    ├── chartAxis.js              y-axis domain and tick selection
+    ├── exportCsv.js              CSV assembly with RFC-4180 quoting
+    ├── plate.js                  96-well geometry, edge-well helpers
+    └── __tests__/                Vitest specs and parser fixtures
 ```
 
-## Database Schema
+The workflow is Upload → Map Wells → Review → Results.
 
-The application uses PostgreSQL with the following tables:
+## Data format
 
-- **profiles**: User profiles with role management
-- **experiments**: Saved experiment data and results
+Incucyte exports are tab-separated with a metadata preamble (`Label:`, `Metric:`,
+`Analysis Job:` …), a blank line, then `Date Time / Elapsed / <well columns>`. Well headers
+appear as `: B2` on SX5 and ZOOM, or `A1 : Relative Wound Density (%)` in CSV exports.
+`(Std Err)` columns are skipped and files use CRLF endings.
 
-See `supabase/migrations/` for complete schema definitions.
+The `Metric:` header is read and becomes the y-axis label, so a Wound Confluence export is
+labelled as such rather than as Relative Wound Density.
 
 ## Deployment
 
-For complete deployment instructions including Vercel setup, environment variables, and production configuration, see [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md).
+**Merging to `main` deploys.** `.github/workflows/deploy.yml` builds and publishes to GitHub
+Pages, which is the only deployment target. There is no other hosting and no deploy script to
+run — see the Deployment section of `CLAUDE.md` for the details, and for how to confirm a
+deploy actually shipped.
 
-### Quick Deployment Steps
+## Contributing
 
-1. Push code to GitHub
-2. Connect repository to Vercel
-3. Set environment variables in Vercel dashboard
-4. Deploy
-
-## Environment Variables
-
-Required environment variables:
-
-- `VITE_SUPABASE_URL` - Your Supabase project URL
-- `VITE_SUPABASE_ANON_KEY` - Your Supabase anonymous key
-
-These should be set in:
-- `.env.local` for local development
-- Vercel dashboard for production
-
-## Authentication Flow
-
-1. User clicks "Sign in with Google"
-2. Redirected to Google OAuth consent screen
-3. After approval, redirected to `/auth/callback`
-4. User profile created automatically in PostgreSQL
-5. First user is automatically assigned admin role
-6. User redirected to main analyzer
-
-## Support
-
-For issues or questions, please refer to the [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) for troubleshooting and additional information.
-
----
-
-## React + Vite Template Information
-
-This project is built on a React + Vite template. For more information about the template setup:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-### React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-### Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+`CLAUDE.md` documents the conventions that are load-bearing — invariants that have each been
+broken at least once and produced a wrong number or a misleading chart. Read it before
+changing the parser, the statistics, or anything that renders a value.
