@@ -151,20 +151,47 @@ export const buildAnalysisCsv = ({
     });
   }
 
-  // --- Section 5: raw per-well time course --------------------------------
+  // --- Section 5: excluded wells ------------------------------------------
+  // Anything dropped has to stay visible, otherwise the export silently claims a
+  // cleaner experiment than was run. Excluded wells used to vanish from the file
+  // entirely unless QC happened to have flagged them.
+  const excluded = conditions.flatMap(c =>
+    c.wells.filter(w => excludedWells?.has(w)).map(w => ({ well: w, condition: c.name }))
+  );
+  lines.push('');
+  lines.push('');
+  lines.push(csvRow(['Excluded Wells (removed from every statistic above)']));
+  if (excluded.length === 0) {
+    lines.push(csvRow(['None — every assigned well was included.']));
+  } else {
+    lines.push(csvRow(['Well', 'Condition', 'QC finding at time of exclusion']));
+    excluded.forEach(({ well, condition }) => {
+      const flags = qcReport?.[well]?.flags;
+      lines.push(
+        csvRow([
+          well,
+          condition,
+          flags?.length ? flags.map(f => f.message).join(' ') : 'No QC flag — excluded manually',
+        ])
+      );
+    });
+  }
+
+  // --- Section 6: raw per-well time course --------------------------------
+  // Every assigned well appears, excluded ones marked in the column header, so
+  // the numbers behind a dropped well can still be audited.
   lines.push('');
   lines.push('');
   lines.push(csvRow(['Raw Well Data (Time Course)']));
   conditions.forEach(c => {
-    const activeWells = c.wells.filter(w => !excludedWells.has(w));
-    if (activeWells.length === 0) return;
+    if (c.wells.length === 0) return;
     lines.push('');
     lines.push(csvRow([c.name]));
-    lines.push(csvRow(['Time (h)', ...activeWells]));
+    lines.push(
+      csvRow(['Time (h)', ...c.wells.map(w => (excludedWells?.has(w) ? `${w} (excluded)` : w))])
+    );
     timepoints.forEach((time, timeIdx) => {
-      lines.push(
-        csvRow([time, ...activeWells.map(w => num(rawData[w]?.[timeIdx]))])
-      );
+      lines.push(csvRow([time, ...c.wells.map(w => num(rawData[w]?.[timeIdx]))]));
     });
   });
 

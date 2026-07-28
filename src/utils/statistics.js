@@ -1,28 +1,59 @@
 import jStat from 'jstat';
 
+/**
+ * Descriptive stats for one set of well readings.
+ *
+ * Absent quantities are `null`, never 0. "No wells reported a value here" and
+ * "the wound density was 0%" are different claims, and returning 0 for the first
+ * made the chart draw a measured-looking point on the baseline. Likewise a single
+ * well has no sample SD — it needs n-1 degrees of freedom — so reporting 0 drew a
+ * ±0.00 error bar implying perfect precision.
+ *
+ * @returns {{mean: number|null, sd: number|null, sem: number|null, n: number, values: number[]}}
+ */
 export const calculateStats = (values) => {
-  const filtered = values.filter(v => v !== null && v !== undefined && !isNaN(v));
-  if (filtered.length === 0) return { mean: 0, sd: 0, sem: 0, n: 0, values: [] };
+  const filtered = (values || []).filter(v => v !== null && v !== undefined && !isNaN(v));
   const n = filtered.length;
+  if (n === 0) return { mean: null, sd: null, sem: null, n: 0, values: [] };
+
   const mean = filtered.reduce((a, b) => a + b, 0) / n;
-  const variance = n > 1 ? filtered.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1) : 0;
+  if (n === 1) return { mean, sd: null, sem: null, n, values: filtered };
+
+  const variance = filtered.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1);
   const sd = Math.sqrt(variance);
-  const sem = n > 0 ? sd / Math.sqrt(n) : 0;
-  return { mean, sd, sem, n, values: filtered };
+  return { mean, sd, sem: sd / Math.sqrt(n), n, values: filtered };
 };
 
+/**
+ * Welch's two-tailed t-test.
+ *
+ * `testable` distinguishes "tested, found no difference" from "could not be
+ * tested". Both used to report p=1, which let an unassigned or single-well
+ * condition enter the multiple-comparison family and weaken every real
+ * comparison alongside it.
+ */
 export const tTest = (group1, group2) => {
   const stats1 = calculateStats(group1);
   const stats2 = calculateStats(group2);
 
-  if (stats1.n < 2 || stats2.n < 2) return { t: 0, p: 1, df: 0, significant: false, stars: 'ns' };
+  const untestable = (reason) => ({
+    t: null, p: null, df: null, significant: false, stars: 'n/a', testable: false, reason,
+  });
+
+  if (stats1.n < 2 || stats2.n < 2) {
+    return untestable('needs at least 2 replicates per group');
+  }
 
   const n1 = stats1.n, n2 = stats2.n;
   const m1 = stats1.mean, m2 = stats2.mean;
   const v1 = stats1.sd * stats1.sd, v2 = stats2.sd * stats2.sd;
 
   const se = Math.sqrt(v1/n1 + v2/n2);
-  if (se === 0) return { t: 0, p: 1, df: 0, significant: false, stars: 'ns' };
+  if (se === 0) {
+    // Both groups are perfectly constant. There is no variance to test against,
+    // so the comparison is undefined rather than non-significant.
+    return untestable('zero variance in both groups');
+  }
 
   const tStat = (m1 - m2) / se;
   const df = Math.pow(v1/n1 + v2/n2, 2) / (Math.pow(v1/n1, 2)/(n1-1) + Math.pow(v2/n2, 2)/(n2-1));
@@ -33,7 +64,8 @@ export const tTest = (group1, group2) => {
   return {
     t: tStat, p, df,
     significant: p < 0.05,
-    stars: p < 0.001 ? '***' : p < 0.01 ? '**' : p < 0.05 ? '*' : 'ns'
+    stars: p < 0.001 ? '***' : p < 0.01 ? '**' : p < 0.05 ? '*' : 'ns',
+    testable: true,
   };
 };
 
@@ -86,56 +118,86 @@ export const selectBestTriplicate = (wells, rawData, timeIdx) => {
   return bestCombo;
 };
 
+// Match well names in a header field, handling various Incucyte export formats:
+//   "A1", "A01", "A1 : Relative Wound Density (%)", ": B2", ": B2 (Std Err)", ": G12"
+// The well token must be anchored to the start of the field or follow a "<colname>:"
+// separator — this prevents matching stray substrings such as the "E1" inside a job
+// name like "PLATE1_2", which previously hijacked header detection.
+const WELL_PATTERN = /(?:^|:\s*)([A-H])(\d+)/;
+const STD_ERR_PATTERN = /\(Std Err\)/i;
+const ELAPSED_PATTERN = /elapsed/i;
+
+const DELIMITERS = ['\t', ','];
+
+/**
+ * Best header-row candidate in `lines` when split by `delimiter`, or null.
+ *
+ * Scored in tiers so the canonical export always wins over a coincidence:
+ *   3 — an `Elapsed` column and at least one well column: the real Incucyte header
+ *   2 — at least two well columns: a non-standard export with no Elapsed column
+ *   1 — an `Elapsed` column alone: last resort, shape unrecognised
+ *
+ * A line that splits into fewer than two fields is skipped: under the wrong
+ * delimiter a whole row collapses into one field, which is what lets the caller
+ * tell tab-separated and comma-separated files apart.
+ */
+const findHeaderRow = (lines, delimiter) => {
+  let best = null;
+  for (let i = 0; i < lines.length; i++) {
+    const fields = lines[i].split(delimiter).map(f => f.trim());
+    if (fields.length < 2) continue;
+
+    const wellCount = fields.filter(f => !STD_ERR_PATTERN.test(f) && WELL_PATTERN.test(f)).length;
+    const hasElapsed = fields.some(f => ELAPSED_PATTERN.test(f));
+    const tier = hasElapsed && wellCount >= 1 ? 3 : wellCount >= 2 ? 2 : hasElapsed ? 1 : 0;
+    if (tier === 0) continue;
+
+    if (!best || tier > best.tier || (tier === best.tier && wellCount > best.wellCount)) {
+      best = { index: i, tier, wellCount, delimiter };
+    }
+    // The canonical header is unambiguous — take the first one and stop, so a
+    // later data row can never outscore it.
+    if (tier === 3) break;
+  }
+  return best;
+};
+
+/**
+ * `Metric: Relative Wound Density (Percent)` from the preamble, tidied for use as
+ * an axis label. Returns null when the export carries no Metric line.
+ */
+const extractMetric = (lines, headerIndex) => {
+  for (let i = 0; i < headerIndex; i++) {
+    const m = lines[i].match(/^\s*Metric\s*:\s*(.+?)\s*$/i);
+    if (m && m[1]) return m[1].replace(/\(\s*percent\s*\)/i, '(%)');
+  }
+  return null;
+};
+
+/** True when the metric is a percentage, so a 0-100 axis is the right full scale. */
+export const isPercentMetric = (metric) =>
+  metric == null ? true : /%|percent/i.test(metric);
+
 export const parseIncucyteData = (text) => {
   const lines = text.split('\n').filter(line => line.trim());
 
-  // Auto-detect delimiter: tab vs comma
-  // Check which delimiter produces more columns on the first few lines
-  const detectDelimiter = (lines) => {
-    for (let i = 0; i < Math.min(lines.length, 10); i++) {
-      const tabCount = (lines[i].match(/\t/g) || []).length;
-      const commaCount = (lines[i].match(/,/g) || []).length;
-      if (tabCount > 2 || commaCount > 2) {
-        return tabCount >= commaCount ? '\t' : ',';
-      }
-    }
-    return '\t';
-  };
-  const delimiter = detectDelimiter(lines);
+  // Delimiter and header row are resolved together. Scoring each delimiter by the
+  // header it can actually find is what stops free-text metadata from deciding the
+  // format: a `Notes:` value with three commas used to make a tab-separated export
+  // parse as CSV, which yielded one well column and no data rows at all.
+  const header = DELIMITERS
+    .map(d => findHeaderRow(lines, d))
+    .filter(Boolean)
+    .sort((a, b) => (b.tier - a.tier) || (b.wellCount - a.wellCount))[0];
 
-  // Match well names in a header field, handling various Incucyte export formats:
-  //   "A1", "A01", "A1 : Relative Wound Density (%)", ": B2", ": B2 (Std Err)", ": G12"
-  // The well token must be anchored to the start of the field or follow a "<colname>:"
-  // separator — this prevents matching stray substrings such as the "E1" inside a job
-  // name like "PLATE1_2", which previously hijacked header detection.
-  const wellPattern = /(?:^|:\s*)([A-H])(\d+)/;
-  const stdErrPattern = /\(Std Err\)/i;
-
-  // Count how many delimited fields in a line look like real well columns.
-  const countWellColumns = (line) =>
-    line.split(delimiter).filter(field => {
-      const f = field.trim();
-      return !stdErrPattern.test(f) && wellPattern.test(f);
-    }).length;
-
-  // Header detection (two passes, most-reliable first):
-  //   1. The canonical Incucyte/CSV header always carries an "Elapsed" column.
-  //   2. Fallback for non-standard exports: the first delimited line with at least
-  //      two distinct well columns. Requiring >=2 means a lone stray match in a
-  //      metadata value can never be mistaken for the header.
-  let headerIndex = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (/elapsed/i.test(lines[i])) { headerIndex = i; break; }
-  }
-  if (headerIndex === -1) {
-    for (let i = 0; i < lines.length; i++) {
-      if (countWellColumns(lines[i]) >= 2) { headerIndex = i; break; }
-    }
-  }
-
-  if (headerIndex === -1) {
+  if (!header) {
     throw new Error('Could not find a data header row (no "Elapsed" column or well columns detected). Is this a valid Incucyte export?');
   }
+
+  const { delimiter, index: headerIndex } = header;
+  const wellPattern = WELL_PATTERN;
+  const stdErrPattern = STD_ERR_PATTERN;
+  const metric = extractMetric(lines, headerIndex);
 
   const headers = lines[headerIndex].split(delimiter).map(h => h.trim());
 
@@ -179,5 +241,5 @@ export const parseIncucyteData = (text) => {
     });
   }
 
-  return { wells, timepoints, rawData };
+  return { wells, timepoints, rawData, metric };
 };

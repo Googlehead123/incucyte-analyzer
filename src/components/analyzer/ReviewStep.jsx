@@ -1,13 +1,32 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { isEdgeWell, countEdgeWells } from '../../utils/plate';
+import { computeYAxisScale } from '../../utils/chartAxis';
 
-const Sparkline = ({ data, color }) => {
+/**
+ * One well's trace, drawn on a scale shared with every other well on the step.
+ *
+ * These used to normalise to each well's own min/max, so a well creeping 0→2%
+ * and a well closing 0→80% drew the same picture. The entire purpose of this
+ * panel is spotting the well that does not match its neighbours, which
+ * per-well autoscaling made impossible.
+ */
+const Sparkline = ({ data, color, domain }) => {
   if (!data || data.length === 0) return null;
-  const max = Math.max(...data);
-  const min = Math.min(...data);
+  const [min, max] = domain;
   const range = max - min || 1;
-  const points = data.map((v, i) => `${(i / (data.length - 1)) * 100},${100 - ((v - min) / range) * 100}`).join(' ');
-  
+  // A single reading has no line to draw; mark it so the cell is not silently blank.
+  if (data.length === 1) {
+    const y = 100 - ((data[0] - min) / range) * 100;
+    return (
+      <svg style={{ width: '100%', height: '32px' }} viewBox="0 0 100 100" preserveAspectRatio="none">
+        <circle cx="50" cy={y} r="6" fill={color} />
+      </svg>
+    );
+  }
+  const points = data
+    .map((v, i) => `${(i / (data.length - 1)) * 100},${100 - ((v - min) / range) * 100}`)
+    .join(' ');
+
   return (
     <svg style={{ width: '100%', height: '32px' }} viewBox="0 0 100 100" preserveAspectRatio="none">
       <polyline fill="none" stroke={color} strokeWidth="3" points={points} />
@@ -41,6 +60,18 @@ const ReviewStep = ({
   setStep,
   styles
 }) => {
+  // One scale for every sparkline on the step, so the traces are comparable.
+  const sparklineDomain = useMemo(() => {
+    const values = [];
+    for (const condition of conditions) {
+      for (const well of condition.wells) {
+        const s = getWellStats(well);
+        if (s?.values) values.push(...s.values);
+      }
+    }
+    return computeYAxisScale(values, { fullScale: false }).domain;
+  }, [conditions, getWellStats]);
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
       <div style={styles.card}>
@@ -121,8 +152,10 @@ const ReviewStep = ({
                           {isExcluded && <span style={{ fontSize: '9px', padding: '2px 4px', backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', borderRadius: '4px' }}>×</span>}
                         </span>
                       </div>
-                      {stats && (<><Sparkline data={stats.values} color={isExcluded ? '#475569' : condition.color} />
-                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Final: {stats.finalValue.toFixed(1)}%</div></>)}
+                      {stats && (<><Sparkline data={stats.values} domain={sparklineDomain} color={isExcluded ? '#475569' : condition.color} />
+                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>
+                          Final: {stats.values.length ? `${stats.finalValue.toFixed(1)}%` : '—'}
+                        </div></>)}
                     </div>
                   );
                 })}

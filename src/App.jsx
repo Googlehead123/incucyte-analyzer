@@ -5,7 +5,7 @@ import PlateMapStep from './components/analyzer/PlateMapStep';
 import ReviewStep from './components/analyzer/ReviewStep';
 import ResultsStep from './components/analyzer/ResultsStep';
 import { CONDITION_COLORS, CHART_THEMES } from './utils/constants';
-import { parseIncucyteData } from './utils/statistics';
+import { parseIncucyteData, isPercentMetric } from './utils/statistics';
 import { runAnalysis, keyOf, OUTLIER_LABELS } from './utils/analysis';
 import { evaluateWells, countBySeverity, detectScanFailures } from './utils/qc';
 import { buildAnalysisCsv } from './utils/exportCsv';
@@ -60,7 +60,10 @@ function App() {
 
   const [figureTitle, setFigureTitle] = useState('Wound Healing Assay Results');
   const [xAxisLabel, _setXAxisLabel] = useState('Time (hours)');
-  const [yAxisLabel, _setYAxisLabel] = useState('Relative Wound Density (%)');
+  // Seeded from the export's `Metric:` header on upload. Hardcoding it meant a
+  // Wound Confluence export plotted correctly but was labelled as Relative Wound
+  // Density — the figure asserted the wrong measurement.
+  const [yAxisLabel, setYAxisLabel] = useState('Relative Wound Density (%)');
 
   const [timeCourseEndpoint, setTimeCourseEndpoint] = useState(null);
   // 'full' keeps 0-100% on screen — the wound's natural range — so plots from
@@ -101,6 +104,12 @@ function App() {
         setRawData(result.rawData);
         setWells(result.wells);
         setTimepoints(result.timepoints);
+        // Label the axis with the metric the instrument actually exported.
+        setYAxisLabel(result.metric || 'Relative Wound Density (%)');
+        // A 0-100 full scale is only meaningful for a percentage metric. Anything
+        // else (wound width in µm, confluence area) has no natural ceiling, so
+        // start those fitted to the data instead of squashed against a false 100.
+        setYAxisScale(isPercentMetric(result.metric) ? 'full' : 'fit');
         setConditions([
           { id: 1, name: 'Control', color: CONDITION_COLORS[0], wells: [] },
           { id: 2, name: 'Treatment', color: CONDITION_COLORS[1], wells: [] }
@@ -351,8 +360,10 @@ function App() {
         // Distinguish duplicate display names on the axis so two bars labelled
         // the same are still tellable apart.
         key: k,
-        value: processedData.statistics[k]?.mean || 0,
-        error: processedData.statistics[k]?.[errorBarType] || 0,
+        // null, not 0: a condition with no usable wells must not draw a bar sitting
+        // on the baseline, and n=1 has no error bar to draw.
+        value: processedData.statistics[k]?.mean ?? null,
+        error: processedData.statistics[k]?.[errorBarType] ?? null,
         fill: condition.color,
         pValue: processedData.pValues[k]?.p ?? null,
         significance: processedData.pValues[k]?.stars || 'ns',

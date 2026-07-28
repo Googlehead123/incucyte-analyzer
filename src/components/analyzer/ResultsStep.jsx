@@ -3,6 +3,10 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { CHART_THEMES } from '../../utils/constants';
 import { computeYAxisScale, collectTimeCourseValues, collectBarValues } from '../../utils/chartAxis';
 
+/** Absent values print as an em dash so a gap never reads as a measured 0. */
+const fmt = (v, digits = 2, suffix = '%') =>
+  typeof v === 'number' && Number.isFinite(v) ? `${v.toFixed(digits)}${suffix}` : '—';
+
 const CustomTooltip = ({ active, payload, label, theme }) => {
   if (!active || !payload) return null;
   const t = CHART_THEMES[theme] || CHART_THEMES.dark;
@@ -17,7 +21,7 @@ const CustomTooltip = ({ active, payload, label, theme }) => {
       <p style={{ color: t.textColor, fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>{label}h</p>
       {payload.map((entry, idx) => (
         <p key={idx} style={{ color: entry.color, fontSize: '13px', margin: '4px 0' }}>
-          {entry.name}: {entry.value?.toFixed(2)}%
+          {entry.name}: {fmt(entry.value)}
         </p>
       ))}
     </div>
@@ -299,7 +303,7 @@ const ResultsStep = ({
                   label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', fill: theme.textColor, fontSize: 12, fontFamily: 'Arial, sans-serif', dx: -10, dy: 0, style: { textAnchor: 'middle' } }}
                 />
                 <Tooltip contentStyle={{ backgroundColor: theme.tooltipBg, border: `1px solid ${theme.tooltipBorder}`, borderRadius: '8px', color: theme.textColor }}
-                  formatter={(value, name, props) => [`${value?.toFixed(2)}% ± ${props.payload.error?.toFixed(2)} (n=${props.payload.n})`, 'Mean']} />
+                  formatter={(value, name, props) => [`${fmt(value)} ± ${fmt(props.payload.error, 2, '')} (n=${props.payload.n})`, 'Mean']} />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}
                   label={({ x, y, width, index }) => {
                     const sig = barChartData[index]?.significance;
@@ -346,10 +350,14 @@ const ResultsStep = ({
                         {condition.name}{isControl && <span style={{ fontSize: '9px', color: '#4ade80' }}>(ref)</span>}
                       </div>
                     </td>
-                    <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px' }}>{stats.mean?.toFixed(2)} ± {stats[errorBarType]?.toFixed(2)}%</td>
-                    <td style={{ textAlign: 'right', padding: '8px', color: '#94a3b8' }}>{stats.n}</td>
+                    <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px' }}>
+                      {fmt(stats.mean, 2, '')} ± {fmt(stats[errorBarType], 2)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '8px', color: '#94a3b8' }}>{stats.n ?? 0}</td>
                     <td style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '12px', color: '#94a3b8' }}>
-                      {isControl ? '-' : (
+                      {isControl ? '-' : pVal.testable === false ? (
+                        <span title={pVal.reason || 'not testable'} style={{ color: '#64748b' }}>n/a</span>
+                      ) : (
                         <>
                           {pVal.p < 0.0001 ? pVal.p?.toExponential(2) : pVal.p?.toFixed(4)}
                           {processedData.correctionMethod !== 'Uncorrected' && pVal.pRaw != null && (
@@ -400,6 +408,13 @@ const ResultsStep = ({
             {Object.keys(qcReport || {}).length > 0 && (
               <div>• QC flagged {Object.keys(qcReport).length} well{Object.keys(qcReport).length > 1 ? 's' : ''} — see the exported CSV for details</div>
             )}
+            {processedData.untestedCount > 0 && (
+              <div style={{ color: '#fcd34d', marginTop: '4px' }}>
+                ⚠ {processedData.untestedCount} condition{processedData.untestedCount > 1 ? 's' : ''} could not be
+                tested (fewer than 2 replicates) and {processedData.untestedCount > 1 ? 'are' : 'is'} excluded from the
+                correction family — shown as n/a rather than counted as non-significant.
+              </div>
+            )}
             {outlierMethod === 'bestTriplicate' && (
               <div style={{ color: '#fcd34d', marginTop: '4px' }}>
                 ⚠ Best Triplicate is a selection rule; SD/SEM are biased low and p-values are anti-conservative.
@@ -425,7 +440,7 @@ const ResultsStep = ({
                   <td style={{ padding: '8px', fontWeight: '500' }}>{row.time}h</td>
                   {conditions.map(c => (
                     <td key={c.id} style={{ textAlign: 'right', padding: '8px', fontFamily: 'monospace', fontSize: '11px' }}>
-                      {row[`${keyOf(c)}_mean`]?.toFixed(2)} <span style={{ color: '#64748b' }}>± {row[`${keyOf(c)}_${errorBarType}`]?.toFixed(2)}</span>
+                      {fmt(row[`${keyOf(c)}_mean`], 2, '')} <span style={{ color: '#64748b' }}>± {fmt(row[`${keyOf(c)}_${errorBarType}`], 2, '')}</span>
                     </td>
                   ))}
                 </tr>
