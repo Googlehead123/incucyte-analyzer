@@ -110,5 +110,25 @@ The `Metric:` header is read on upload and becomes the y-axis label (`(Percent)`
 with no `Metric:` line fall back to "Relative Wound Density (%)".
 
 ## Deployment
-- GitHub Pages: `npm run deploy` (gh-pages)
-- Vercel: auto-deploy from `dist/`
+
+**Merging to `main` is the deploy.** `.github/workflows/deploy.yml` builds and publishes to
+GitHub Pages through `actions/deploy-pages`, and the site is live at
+https://googlehead123.github.io/incucyte-analyzer/ within about a minute. Nothing else is
+needed, and there is no other hosting — Pages is the only deployment target this repo has.
+
+**Do not run `npm run deploy`.** That script (`gh-pages -d dist`) predates the workflow and
+pushes a hand-built `dist/` to the `gh-pages` branch. Pages is configured `build_type: workflow`,
+so no branch is served any more: the command reports success and changes nothing that is live,
+which is the worst way for a deploy to fail. Deploy by merging.
+
+`vite.config.js` sets `base: '/incucyte-analyzer/'` to match the Pages sub-path. Serving from
+any other origin means changing that first, or every asset 404s.
+
+**Confirm a deploy actually shipped**, rather than trusting a green workflow — Pages can serve a
+cached bundle. The build is content-hashed, so compare what is live against a local build:
+
+```bash
+npm run build
+curl -s https://googlehead123.github.io/incucyte-analyzer/ | grep -o 'assets/index-[^"]*\.js'
+# same filename as dist/assets/index-*.js  ->  the new bundle is live
+```
