@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ErrorBar, Cell } from 'recharts';
 import { CHART_THEMES } from '../../utils/constants';
+import { computeYAxisScale, collectTimeCourseValues, collectBarValues } from '../../utils/chartAxis';
 
 const CustomTooltip = ({ active, payload, label, theme }) => {
   if (!active || !payload) return null;
@@ -109,6 +110,8 @@ const ResultsStep = ({
   filteredTimeCourse,
   timeCourseEndpoint,
   setTimeCourseEndpoint,
+  yAxisScale,
+  setYAxisScale,
   outlierMethod,
   keyOf,
   qcReport,
@@ -121,6 +124,32 @@ const ResultsStep = ({
     borderRadius: '12px',
     padding: '24px',
     border: theme.background === '#ffffff' ? '1px solid #e5e7eb' : '1px solid #334155'
+  };
+
+  // Both charts show the same metric, so they share one scaling rule: whichever
+  // is on screen, 60% closure has to look like 60% closure.
+  const fullScale = yAxisScale === 'full';
+
+  const timeCourseAxis = useMemo(
+    () => computeYAxisScale(
+      collectTimeCourseValues(filteredTimeCourse, conditions, keyOf),
+      { fullScale }
+    ),
+    [filteredTimeCourse, conditions, keyOf, fullScale]
+  );
+
+  const barAxis = useMemo(
+    () => computeYAxisScale(collectBarValues(barChartData), { fullScale }),
+    [barChartData, fullScale]
+  );
+
+  const selectStyle = {
+    padding: '4px 8px',
+    borderRadius: '6px',
+    backgroundColor: theme.background === '#ffffff' ? '#f3f4f6' : '#334155',
+    border: `1px solid ${theme.gridColor}`,
+    color: theme.textColor,
+    fontSize: '12px'
   };
 
   return (
@@ -162,18 +191,34 @@ const ResultsStep = ({
           <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: theme.textColor }}>
             Wound Healing Time Course
           </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontSize: '12px', color: theme.tickColor }}>Show until:</label>
-            <select 
-              value={timeCourseEndpoint === null ? '' : timeCourseEndpoint}
-              onChange={(e) => setTimeCourseEndpoint(e.target.value === '' ? null : Number(e.target.value))}
-              style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.background === '#ffffff' ? '#f3f4f6' : '#334155', border: `1px solid ${theme.gridColor}`, color: theme.textColor, fontSize: '12px' }}
-            >
-              <option value="">All ({Math.max(...timepoints)}h)</option>
-              {timepoints.filter(t => t > 0).map(t => (
-                <option key={t} value={t}>{t}h</option>
-              ))}
-            </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label htmlFor="timecourse-endpoint" style={{ fontSize: '12px', color: theme.tickColor }}>Show until:</label>
+              <select
+                id="timecourse-endpoint"
+                value={timeCourseEndpoint === null ? '' : timeCourseEndpoint}
+                onChange={(e) => setTimeCourseEndpoint(e.target.value === '' ? null : Number(e.target.value))}
+                style={selectStyle}
+              >
+                <option value="">All ({Math.max(...timepoints)}h)</option>
+                {timepoints.filter(t => t > 0).map(t => (
+                  <option key={t} value={t}>{t}h</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label htmlFor="y-axis-scale" style={{ fontSize: '12px', color: theme.tickColor }}>Y-axis:</label>
+              <select
+                id="y-axis-scale"
+                value={yAxisScale}
+                onChange={(e) => setYAxisScale(e.target.value)}
+                style={selectStyle}
+                title="Full scale keeps 0–100% on screen so different experiments can be compared. Fit to data zooms in on a small effect."
+              >
+                <option value="full">Full scale (0–100%)</option>
+                <option value="fit">Fit to data</option>
+              </select>
+            </div>
           </div>
         </div>
         <p style={{ fontSize: '11px', color: theme.tickColor, marginBottom: '16px' }}>
@@ -196,12 +241,11 @@ const ResultsStep = ({
                 tick={{ fill: theme.tickColor, fontSize: 12, fontFamily: 'Arial, sans-serif' }}
                 tickLine={{ stroke: theme.axisColor }}
                 axisLine={{ stroke: theme.axisColor }}
-                // Relative Wound Density legitimately goes negative when a wound
-                // widens early on. A hard 0 floor silently hid those points.
-                domain={([dataMin, dataMax]) => [
-                  dataMin < 0 ? Math.floor(dataMin / 5) * 5 : 0,
-                  dataMax
-                ]}
+                // Domain and ticks are chosen together in chartAxis.js. Handing
+                // Recharts a bare dataMax made it label the top of the axis with
+                // the raw data maximum and stop short of 100%.
+                domain={timeCourseAxis.domain}
+                ticks={timeCourseAxis.ticks}
                 label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', fill: theme.textColor, fontSize: 13, fontFamily: 'Arial, sans-serif', dx: -10, dy: 0, style: { textAnchor: 'middle' } }}
               />
               <Tooltip content={<CustomTooltip theme={chartTheme} />} />
@@ -248,6 +292,10 @@ const ResultsStep = ({
                   tick={{ fill: theme.tickColor, fontSize: 12, fontFamily: 'Arial, sans-serif' }}
                   tickLine={{ stroke: theme.axisColor }}
                   axisLine={{ stroke: theme.axisColor }}
+                  // Same scaling rule as the time course, and wide enough for
+                  // the error bars rather than just the bar tops.
+                  domain={barAxis.domain}
+                  ticks={barAxis.ticks}
                   label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', fill: theme.textColor, fontSize: 12, fontFamily: 'Arial, sans-serif', dx: -10, dy: 0, style: { textAnchor: 'middle' } }}
                 />
                 <Tooltip contentStyle={{ backgroundColor: theme.tooltipBg, border: `1px solid ${theme.tooltipBorder}`, borderRadius: '8px', color: theme.textColor }}

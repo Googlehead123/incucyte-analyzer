@@ -63,6 +63,10 @@ function App() {
   const [yAxisLabel, _setYAxisLabel] = useState('Relative Wound Density (%)');
 
   const [timeCourseEndpoint, setTimeCourseEndpoint] = useState(null);
+  // 'full' keeps 0-100% on screen — the wound's natural range — so plots from
+  // different experiments are comparable. 'fit' zooms to the data for a weak
+  // effect that would otherwise sit flat along the bottom of the axis.
+  const [yAxisScale, setYAxisScale] = useState('full');
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
@@ -577,6 +581,8 @@ function App() {
               filteredTimeCourse={filteredTimeCourse}
               timeCourseEndpoint={timeCourseEndpoint}
               setTimeCourseEndpoint={setTimeCourseEndpoint}
+              yAxisScale={yAxisScale}
+              setYAxisScale={setYAxisScale}
               setStep={setStep}
               styles={styles}
             />

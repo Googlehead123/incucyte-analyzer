@@ -37,6 +37,7 @@ npm run lint       # ESLint
 - `src/utils/qc.js` — per-well QC flags and plate-level scan-failure detection
 - `src/utils/exportCsv.js` — CSV assembly with RFC-4180 quoting
 - `src/utils/plate.js` — 96-well geometry, edge-well helpers
+- `src/utils/chartAxis.js` — y-axis domain + tick selection shared by both charts
 - `src/utils/__tests__/` — Vitest specs + parser fixtures
 
 ## Conventions that are load-bearing
@@ -51,6 +52,16 @@ a one-click exclude; the scientist decides. Anything dropped must be visible in 
 **Correction defaults to off.** `correctionMethod` starts at `'none'` so analyses produced
 before the option existed reproduce exactly. The method used is recorded in the CSV and in
 the figure footer.
+
+**Never hand Recharts a raw `dataMax` as a y-axis bound.** It pins the last tick to
+whatever endpoint you give it, so the axis ends up labelled with the data maximum
+(`[0, 20, 40, 63.53]`). Rounding the domain alone isn't enough either — its own tick
+picker returns uneven runs like `[-10, 20, 50, 100]`. `computeYAxisScale` in
+`chartAxis.js` chooses the domain and the ticks together; pass both to the axis.
+
+**The y-axis defaults to the full 0–100% scale.** 100% is a closed wound, so a fixed
+scale is what makes two experiments comparable at a glance. "Fit to data" is opt-in per
+session and never changes any computed number. Both charts read the same setting.
 
 **Parser header detection is fragile by nature.** Job names in the metadata block can contain
 well-shaped substrings (a real export named `PLATE1_2` once hijacked detection via the "E1"
