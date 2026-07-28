@@ -69,8 +69,16 @@ export const tTest = (group1, group2) => {
   };
 };
 
+/**
+ * Trapezoid area under the curve, or null when there is nothing to integrate.
+ *
+ * Returning 0 for "fewer than two measured points" made an unassigned condition,
+ * or one whose wells were all excluded, report a confident AUC of 0.0 next to
+ * conditions with real areas.
+ */
 export const calculateAUC = (timepoints, values) => {
-  if (timepoints.length < 2 || values.length < 2) return 0;
+  if (!timepoints || !values) return null;
+  if (timepoints.length < 2 || values.length < 2) return null;
   let auc = 0;
   for (let i = 1; i < timepoints.length; i++) {
     const dt = timepoints[i] - timepoints[i-1];
@@ -129,6 +137,30 @@ const ELAPSED_PATTERN = /elapsed/i;
 
 const DELIMITERS = ['\t', ','];
 
+/** How many lines below `headerIndex` parse as data rows under this delimiter. */
+const countDataRows = (lines, headerIndex, delimiter, timeColIdx) => {
+  let n = 0;
+  for (let i = headerIndex + 1; i < lines.length; i++) {
+    const values = lines[i].split(delimiter);
+    if (values.length < 3) continue;
+    if (!Number.isNaN(parseFloat(values[timeColIdx]))) n += 1;
+  }
+  return n;
+};
+
+/**
+ * Ranking for header candidates. Whether the candidate actually has data under it
+ * dominates everything else: a header with no rows beneath it is not a header,
+ * however convincing the line looks on its own.
+ */
+const betterHeader = (a, b) => {
+  if (!b) return true;
+  const aHas = a.dataRows > 0, bHas = b.dataRows > 0;
+  if (aHas !== bHas) return aHas;
+  if (a.tier !== b.tier) return a.tier > b.tier;
+  return a.wellCount > b.wellCount;
+};
+
 /**
  * Best header-row candidate in `lines` when split by `delimiter`, or null.
  *
@@ -137,7 +169,12 @@ const DELIMITERS = ['\t', ','];
  *   2 — at least two well columns: a non-standard export with no Elapsed column
  *   1 — an `Elapsed` column alone: last resort, shape unrecognised
  *
- * A line that splits into fewer than two fields is skipped: under the wrong
+ * Tiers alone are not enough. A `Notes:` line reading "bad scan at Elapsed, A1,
+ * A2, A3, A4" splits on commas into an Elapsed field plus four well-shaped
+ * fields, scoring tier 3 with a higher well count than the genuine tab header.
+ * Requiring parseable data rows underneath is what settles it: prose has none.
+ *
+ * A line that splits into fewer than two fields is skipped — under the wrong
  * delimiter a whole row collapses into one field, which is what lets the caller
  * tell tab-separated and comma-separated files apart.
  */
@@ -148,16 +185,21 @@ const findHeaderRow = (lines, delimiter) => {
     if (fields.length < 2) continue;
 
     const wellCount = fields.filter(f => !STD_ERR_PATTERN.test(f) && WELL_PATTERN.test(f)).length;
-    const hasElapsed = fields.some(f => ELAPSED_PATTERN.test(f));
+    const elapsedIdx = fields.findIndex(f => ELAPSED_PATTERN.test(f));
+    const hasElapsed = elapsedIdx >= 0;
     const tier = hasElapsed && wellCount >= 1 ? 3 : wellCount >= 2 ? 2 : hasElapsed ? 1 : 0;
     if (tier === 0) continue;
 
-    if (!best || tier > best.tier || (tier === best.tier && wellCount > best.wellCount)) {
-      best = { index: i, tier, wellCount, delimiter };
-    }
-    // The canonical header is unambiguous — take the first one and stop, so a
+    const timeColIdx = hasElapsed ? elapsedIdx : 1;
+    const candidate = {
+      index: i, tier, wellCount, delimiter, timeColIdx,
+      dataRows: countDataRows(lines, i, delimiter, timeColIdx),
+    };
+    if (betterHeader(candidate, best)) best = candidate;
+
+    // A canonical header with real data under it is unambiguous — stop, so a
     // later data row can never outscore it.
-    if (tier === 3) break;
+    if (tier === 3 && candidate.dataRows > 0) break;
   }
   return best;
 };
@@ -188,7 +230,7 @@ export const parseIncucyteData = (text) => {
   const header = DELIMITERS
     .map(d => findHeaderRow(lines, d))
     .filter(Boolean)
-    .sort((a, b) => (b.tier - a.tier) || (b.wellCount - a.wellCount))[0];
+    .reduce((best, c) => (betterHeader(c, best) ? c : best), null);
 
   if (!header) {
     throw new Error('Could not find a data header row (no "Elapsed" column or well columns detected). Is this a valid Incucyte export?');
@@ -226,13 +268,26 @@ export const parseIncucyteData = (text) => {
 
   const timepoints = [];
   const rawData = {};
+  const warnings = [];
   wells.forEach(well => { rawData[well] = []; });
+
+  // A repeated elapsed value is a corrupt export. Keeping both rows was worse than
+  // dropping one: the endpoint picker showed two identical options and analysis
+  // resolved the endpoint with findIndex, so it always silently used the first —
+  // a plate could report 10% at 24h while the table below showed 90% at 24h.
+  const seenElapsed = new Set();
+  const duplicates = [];
 
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const values = lines[i].split(delimiter);
     if (values.length < 3) continue;
     const elapsed = parseFloat(values[timeColIdx]);
     if (isNaN(elapsed)) continue;
+    if (seenElapsed.has(elapsed)) {
+      duplicates.push(elapsed);
+      continue;
+    }
+    seenElapsed.add(elapsed);
     timepoints.push(elapsed);
     wells.forEach(well => {
       const idx = wellIndices[well];
@@ -241,5 +296,21 @@ export const parseIncucyteData = (text) => {
     });
   }
 
-  return { wells, timepoints, rawData, metric };
+  if (duplicates.length) {
+    const shown = [...new Set(duplicates)].slice(0, 5).join('h, ');
+    warnings.push(
+      `Dropped ${duplicates.length} row${duplicates.length > 1 ? 's' : ''} with a repeated elapsed time ` +
+      `(${shown}h${new Set(duplicates).size > 5 ? ', …' : ''}). The first row for each timepoint was kept — ` +
+      `check the export, since a duplicate timepoint usually means the file is truncated or concatenated.`
+    );
+  }
+
+  // Elapsed times that go backwards would make the time axis and the trapezoid
+  // AUC meaningless, so say so rather than plotting a zigzag.
+  const outOfOrder = timepoints.some((t, i) => i > 0 && t < timepoints[i - 1]);
+  if (outOfOrder) {
+    warnings.push('Elapsed times are not in increasing order. The chart and the AUC follow file order, so check the export.');
+  }
+
+  return { wells, timepoints, rawData, metric, warnings };
 };

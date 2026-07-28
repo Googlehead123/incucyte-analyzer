@@ -147,6 +147,12 @@ const ResultsStep = ({
     [barChartData, fullScale]
   );
 
+  // AUC is integrated over the whole measured run, independent of "Show until".
+  const aucWindowLabel = useMemo(() => {
+    const times = (processedData.timeCourse || []).map(r => r.time).filter(Number.isFinite);
+    return times.length ? `${Math.min(...times)}–${Math.max(...times)}h` : 'no data';
+  }, [processedData.timeCourse]);
+
   const selectStyle = {
     padding: '4px 8px',
     borderRadius: '6px',
@@ -383,14 +389,22 @@ const ResultsStep = ({
           </table>
           
           <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'rgba(51, 65, 85, 0.3)', borderRadius: '12px' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#e2e8f0', marginBottom: '8px' }}>📈 AUC Analysis</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#e2e8f0', marginBottom: '4px' }}>
+              📈 AUC Analysis <span style={{ fontWeight: '400', color: '#94a3b8' }}>({aucWindowLabel})</span>
+            </h4>
+            {/* "Show until" only trims the chart. Saying so stops the AUC beside a
+                truncated curve from being read as the area of what is on screen. */}
+            <p style={{ fontSize: '10px', color: '#64748b', margin: '0 0 8px 0', lineHeight: 1.4 }}>
+              Integrated over every measured timepoint
+              {timeCourseEndpoint !== null && ' — the “Show until” setting trims the chart above but not this area'}.
+            </p>
             <table style={{ width: '100%', fontSize: '12px' }}>
               <thead><tr style={{ color: '#94a3b8' }}><th style={{ textAlign: 'left', padding: '4px' }}>Condition</th><th style={{ textAlign: 'right', padding: '4px' }}>AUC</th><th style={{ textAlign: 'right', padding: '4px' }}>vs Control</th></tr></thead>
               <tbody>
                 {conditions.map(condition => (
                   <tr key={condition.id}>
                     <td style={{ padding: '4px', color: condition.color }}>{condition.name}</td>
-                    <td style={{ textAlign: 'right', padding: '4px', fontFamily: 'monospace' }}>{processedData.auc[keyOf(condition)]?.toFixed(1)}</td>
+                    <td style={{ textAlign: 'right', padding: '4px', fontFamily: 'monospace' }}>{fmt(processedData.auc[keyOf(condition)], 1, '')}</td>
                     <td style={{ textAlign: 'right', padding: '4px', fontFamily: 'monospace', color: '#4ade80' }}>{processedData.auc[`${keyOf(condition)}_relative`] != null ? `${processedData.auc[`${keyOf(condition)}_relative`]}%` : 'n/a'}</td>
                   </tr>
                 ))}

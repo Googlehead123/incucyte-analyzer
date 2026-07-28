@@ -181,11 +181,13 @@ export const runAnalysis = ({
   const controlAUC = results.auc[results.controlKey];
   conditions.forEach(condition => {
     const k = keyOf(condition);
-    // A zero/absent control AUC makes the ratio meaningless — report it as
-    // unavailable rather than silently dividing by a placeholder 1.
+    const auc = results.auc[k];
+    // Both ends have to be real numbers. Guarding only the denominator let a null
+    // numerator coerce to 0 in the division, so a condition with no data at all
+    // reported a confident "0.0%" of control instead of "n/a".
     results.auc[`${k}_relative`] =
-      typeof controlAUC === 'number' && controlAUC !== 0
-        ? (results.auc[k] / controlAUC * 100).toFixed(1)
+      typeof auc === 'number' && typeof controlAUC === 'number' && controlAUC !== 0
+        ? (auc / controlAUC * 100).toFixed(1)
         : null;
   });
 

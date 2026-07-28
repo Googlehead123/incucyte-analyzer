@@ -12,6 +12,23 @@ export const csvField = (value) => {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+/**
+ * Neutralise a user-supplied text field so a spreadsheet renders it as text.
+ *
+ * Excel and Sheets evaluate a cell beginning with `=`, `+`, `-`, `@`, tab or CR as
+ * a formula, so a condition named `=Ctrl` currently displays as `#NAME?` and one
+ * named `=HYPERLINK(...)` becomes a live link. A leading apostrophe is the
+ * standard escape and the spreadsheet strips it on display.
+ *
+ * Apply this ONLY to free text. Running it over numbers would turn every negative
+ * value into `'-5.0000` and break the numeric columns.
+ */
+export const sanitizeCsvText = (value) => {
+  if (value === null || value === undefined) return '';
+  const s = String(value);
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+};
+
 export const csvRow = (fields) => fields.map(csvField).join(',');
 
 const num = (v, digits = 4) =>
@@ -42,10 +59,10 @@ export const buildAnalysisCsv = ({
     csvRow([
       'Time (h)',
       ...conditions.flatMap(c => [
-        `${c.name} Mean`,
-        `${c.name} SD`,
-        `${c.name} SEM`,
-        `${c.name} N`,
+        `${sanitizeCsvText(c.name)} Mean`,
+        `${sanitizeCsvText(c.name)} SD`,
+        `${sanitizeCsvText(c.name)} SEM`,
+        `${sanitizeCsvText(c.name)} N`,
       ]),
     ])
   );
@@ -103,7 +120,7 @@ export const buildAnalysisCsv = ({
         : '';
     lines.push(
       csvRow([
-        c.name,
+        sanitizeCsvText(c.name),
         num(s.mean),
         num(s.sd),
         num(s.sem),
@@ -147,7 +164,7 @@ export const buildAnalysisCsv = ({
     lines.push(csvRow(['Quality-Control Flags (advisory — no data was auto-removed)']));
     lines.push(csvRow(['Well', 'Severity', 'Finding']));
     qcEntries.forEach(([well, r]) => {
-      r.flags.forEach(f => lines.push(csvRow([well, r.severity, f.message])));
+      r.flags.forEach(f => lines.push(csvRow([well, r.severity, sanitizeCsvText(f.message)])));
     });
   }
 
@@ -156,7 +173,7 @@ export const buildAnalysisCsv = ({
   // cleaner experiment than was run. Excluded wells used to vanish from the file
   // entirely unless QC happened to have flagged them.
   const excluded = conditions.flatMap(c =>
-    c.wells.filter(w => excludedWells?.has(w)).map(w => ({ well: w, condition: c.name }))
+    c.wells.filter(w => excludedWells?.has(w)).map(w => ({ well: w, condition: sanitizeCsvText(c.name) }))
   );
   lines.push('');
   lines.push('');
@@ -171,7 +188,7 @@ export const buildAnalysisCsv = ({
         csvRow([
           well,
           condition,
-          flags?.length ? flags.map(f => f.message).join(' ') : 'No QC flag — excluded manually',
+          sanitizeCsvText(flags?.length ? flags.map(f => f.message).join(' ') : 'No QC flag — excluded manually'),
         ])
       );
     });
@@ -186,7 +203,7 @@ export const buildAnalysisCsv = ({
   conditions.forEach(c => {
     if (c.wells.length === 0) return;
     lines.push('');
-    lines.push(csvRow([c.name]));
+    lines.push(csvRow([sanitizeCsvText(c.name)]));
     lines.push(
       csvRow(['Time (h)', ...c.wells.map(w => (excludedWells?.has(w) ? `${w} (excluded)` : w))])
     );

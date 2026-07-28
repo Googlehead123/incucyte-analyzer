@@ -72,9 +72,25 @@ Anything rendering these must handle null — `fmt()` in `ResultsStep` prints an
 `num()` in `exportCsv` writes an empty field.
 
 **Untestable comparisons stay out of the correction family.** `tTest` sets `testable: false`
-(not `p: 1`) when a group has <2 replicates or zero variance. `runAnalysis` filters those out
-before adjusting, so an unassigned condition cannot inflate k and weaken every real comparison.
-They report as `n/a`, and `untestedCount` surfaces them in the figure footer.
+(not `p: 1`) when either group has <2 replicates, or when *both* groups have zero variance.
+`runAnalysis` filters those out before adjusting, so an unassigned condition cannot inflate k
+and weaken every real comparison. They report as `n/a`, and `untestedCount` surfaces them in
+the figure footer. One constant group is deliberately still testable — Welch's t is well
+defined there (df collapses to the other group's n−1) and discarding it would throw away a
+real result.
+
+**Absent AUC is `null`.** `calculateAUC` returns null below two measured points. When deriving
+anything from it, guard *both* operands: `null / controlAUC * 100` coerces to 0 and reports a
+confident "0.0% of control" for a condition that has no data at all.
+
+**QC thresholds are calibrated in RWD percentage points.** `evaluateWell` and
+`detectScanFailures` take `percentMetric`; when false they run only the scale-free checks
+(missing data, empty well). Without that, a wound-width export in µm has every healthy well
+flagged "outside the plausible range" and reported as a percentage.
+
+**Only free text goes through `sanitizeCsvText`.** It apostrophe-prefixes `= + - @` so a
+condition named `=Ctrl` renders as text rather than `#NAME?` in Excel. Never run it over
+numbers — it would turn every negative value into `'-5.0000`.
 
 **Parser header detection is fragile by nature.** Everything before the header is free text an
 operator typed, and it has hijacked parsing twice: a job name `PLATE1_2` matched via the "E1"

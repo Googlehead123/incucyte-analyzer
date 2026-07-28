@@ -7,7 +7,7 @@ import ResultsStep from './components/analyzer/ResultsStep';
 import { CONDITION_COLORS, CHART_THEMES } from './utils/constants';
 import { parseIncucyteData, isPercentMetric } from './utils/statistics';
 import { runAnalysis, keyOf, OUTLIER_LABELS } from './utils/analysis';
-import { evaluateWells, countBySeverity, detectScanFailures } from './utils/qc';
+import { evaluateWells, countBySeverity, detectScanFailures, QC_NON_PERCENT_NOTE } from './utils/qc';
 import { buildAnalysisCsv } from './utils/exportCsv';
 
 class ErrorBoundary extends React.Component {
@@ -57,6 +57,9 @@ function App() {
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [chartTheme, setChartTheme] = useState('dark');
   const [appError, setAppError] = useState(null);
+  // Non-fatal problems found while parsing (dropped duplicate timepoints, etc).
+  const [appNotices, setAppNotices] = useState([]);
+  const [metric, setMetric] = useState(null);
 
   const [figureTitle, setFigureTitle] = useState('Wound Healing Assay Results');
   const [xAxisLabel, _setXAxisLabel] = useState('Time (hours)');
@@ -105,6 +108,8 @@ function App() {
         setWells(result.wells);
         setTimepoints(result.timepoints);
         // Label the axis with the metric the instrument actually exported.
+        setMetric(result.metric);
+        setAppNotices(result.warnings || []);
         setYAxisLabel(result.metric || 'Relative Wound Density (%)');
         // A 0-100 full scale is only meaningful for a percentage metric. Anything
         // else (wound width in µm, confluence area) has no natural ceiling, so
@@ -147,7 +152,15 @@ function App() {
   const removeCondition = useCallback((index) => {
     if (conditions.length <= 1) return;
     setConditions(conditions.filter((_, i) => i !== index));
-    setActiveConditionIdx(Math.max(0, activeConditionIdx - 1));
+    // Shift the selection only when the removal actually moves it. This used to
+    // decrement unconditionally, so deleting a *later* condition silently moved
+    // the active selection one to the left and the next well assigned went to the
+    // wrong condition.
+    setActiveConditionIdx(
+      index === activeConditionIdx ? Math.max(0, activeConditionIdx - 1)
+        : index < activeConditionIdx ? activeConditionIdx - 1
+        : activeConditionIdx
+    );
     if (controlConditionIdx >= index) setControlConditionIdx(Math.max(0, controlConditionIdx - 1));
   }, [conditions, activeConditionIdx, controlConditionIdx]);
 
@@ -303,11 +316,15 @@ function App() {
   // Advisory QC across every assigned well. Recomputed only when the data or the
   // assignment changes; excluded wells stay in the report so the reason a well
   // was dropped remains visible (and lands in the export).
+  // QC thresholds are calibrated in RWD percentage points, so they only apply to a
+  // percentage metric — see QC_NON_PERCENT_NOTE.
+  const percentMetric = useMemo(() => isPercentMetric(metric), [metric]);
+
   const qcReport = useMemo(() => {
     if (!rawData || timepoints.length === 0) return {};
     const assigned = [...new Set(conditions.flatMap(c => c.wells))];
-    return evaluateWells(assigned, rawData, timepoints);
-  }, [rawData, conditions, timepoints]);
+    return evaluateWells(assigned, rawData, timepoints, { percentMetric });
+  }, [rawData, conditions, timepoints, percentMetric]);
 
   const qcCounts = useMemo(() => countBySeverity(qcReport), [qcReport]);
 
@@ -316,8 +333,8 @@ function App() {
   const scanFailures = useMemo(() => {
     if (!rawData || timepoints.length === 0) return [];
     const assigned = [...new Set(conditions.flatMap(c => c.wells))];
-    return detectScanFailures(assigned, rawData, timepoints);
-  }, [rawData, conditions, timepoints]);
+    return detectScanFailures(assigned, rawData, timepoints, { percentMetric });
+  }, [rawData, conditions, timepoints, percentMetric]);
 
   // Wells flagged high-severity that the user has not yet excluded.
   const unresolvedQcWells = useMemo(
@@ -337,8 +354,16 @@ function App() {
 
   const getWellStats = useCallback((well) => {
     if (!rawData?.[well]) return null;
-    const values = rawData[well].filter(v => v != null);
-    return { finalValue: values[values.length - 1] || 0, maxValue: Math.max(...values), values };
+    const series = rawData[well];
+    const values = series.filter(v => v != null);
+    return {
+      finalValue: values.length ? values[values.length - 1] : null,
+      maxValue: values.length ? Math.max(...values) : null,
+      values,
+      // Time-aligned, nulls intact, so a sparkline can draw a gap where a frame
+      // was lost rather than closing it up into a shorter smooth trace.
+      series,
+    };
   }, [rawData]);
 
   const processData = useCallback(() => {
@@ -495,6 +520,16 @@ function App() {
             </div>
           )}
 
+          {appNotices.length > 0 && (
+            <div role="status" style={{ marginBottom: '16px', padding: '12px 16px', borderRadius: '8px', backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', color: '#fcd34d', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+              <div style={{ lineHeight: 1.5 }}>
+                {appNotices.map((n, i) => <div key={i}>{n}</div>)}
+              </div>
+              <button onClick={() => setAppNotices([])} aria-label="Dismiss warnings"
+                style={{ background: 'none', border: 'none', color: '#fcd34d', cursor: 'pointer', fontSize: '16px', padding: '0 4px', flexShrink: 0 }}>×</button>
+            </div>
+          )}
+
           {step === 1 && (
             <UploadStep
               fileInputRef={fileInputRef}
@@ -553,6 +588,8 @@ function App() {
               timepoints={timepoints}
               qcReport={qcReport}
               qcCounts={qcCounts}
+              qcNote={percentMetric ? null : QC_NON_PERCENT_NOTE}
+              percentMetric={percentMetric}
               scanFailures={scanFailures}
               unresolvedQcWells={unresolvedQcWells}
               excludeAllFlaggedWells={excludeAllFlaggedWells}

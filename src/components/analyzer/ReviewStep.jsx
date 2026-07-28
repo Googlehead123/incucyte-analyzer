@@ -14,22 +14,32 @@ const Sparkline = ({ data, color, domain }) => {
   if (!data || data.length === 0) return null;
   const [min, max] = domain;
   const range = max - min || 1;
-  // A single reading has no line to draw; mark it so the cell is not silently blank.
-  if (data.length === 1) {
-    const y = 100 - ((data[0] - min) / range) * 100;
-    return (
-      <svg style={{ width: '100%', height: '32px' }} viewBox="0 0 100 100" preserveAspectRatio="none">
-        <circle cx="50" cy={y} r="6" fill={color} />
-      </svg>
-    );
-  }
-  const points = data
-    .map((v, i) => `${(i / (data.length - 1)) * 100},${100 - ((v - min) / range) * 100}`)
-    .join(' ');
+  const x = (i) => (data.length === 1 ? 50 : (i / (data.length - 1)) * 100);
+  const y = (v) => 100 - ((v - min) / range) * 100;
+
+  // Nulls break the trace into segments instead of being closed up, so a lost
+  // frame reads as a gap rather than as a shorter, smoother curve.
+  const segments = [];
+  let current = [];
+  data.forEach((v, i) => {
+    if (v === null || v === undefined || Number.isNaN(v)) {
+      if (current.length) segments.push(current);
+      current = [];
+      return;
+    }
+    current.push(`${x(i)},${y(v)}`);
+  });
+  if (current.length) segments.push(current);
+  if (segments.length === 0) return null;
 
   return (
     <svg style={{ width: '100%', height: '32px' }} viewBox="0 0 100 100" preserveAspectRatio="none">
-      <polyline fill="none" stroke={color} strokeWidth="3" points={points} />
+      {segments.map((seg, i) =>
+        seg.length === 1
+          // A lone reading has no line to draw; mark it so the cell is not blank.
+          ? <circle key={i} cx={seg[0].split(',')[0]} cy={seg[0].split(',')[1]} r="5" fill={color} />
+          : <polyline key={i} fill="none" stroke={color} strokeWidth="3" points={seg.join(' ')} />
+      )}
     </svg>
   );
 };
@@ -50,6 +60,8 @@ const ReviewStep = ({
   timepoints,
   qcReport,
   qcCounts,
+  qcNote,
+  percentMetric = true,
   scanFailures,
   unresolvedQcWells,
   excludeAllFlaggedWells,
@@ -60,6 +72,7 @@ const ReviewStep = ({
   setStep,
   styles
 }) => {
+  const unitSuffix = percentMetric ? '%' : '';
   // One scale for every sparkline on the step, so the traces are comparable.
   const sparklineDomain = useMemo(() => {
     const values = [];
@@ -93,6 +106,14 @@ const ReviewStep = ({
                 need re-imaging rather than filtering.</>
               )}
             </div>
+          </div>
+        )}
+
+        {qcNote && (
+          <div role="status" style={{ marginBottom: '12px', padding: '12px 14px', borderRadius: '12px',
+            backgroundColor: 'rgba(148, 163, 184, 0.12)', border: '1px solid rgba(148, 163, 184, 0.35)',
+            fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 }}>
+            {qcNote}
           </div>
         )}
 
@@ -133,9 +154,11 @@ const ReviewStep = ({
                   const qcHigh = qc?.severity === 'high';
                   const qcTitle = qc ? qc.flags.map(f => f.message).join('\n') : undefined;
                   return (
-                    <div key={well} onClick={() => toggleExcludedWell(well)}
+                    <button key={well} type="button" onClick={() => toggleExcludedWell(well)}
                       title={qcTitle}
-                      style={{ padding: '12px', borderRadius: '12px',
+                      aria-pressed={isExcluded}
+                      aria-label={`${well}${qc ? ` — QC ${qc.severity} severity` : ''}${isExcluded ? ' (excluded)' : ''}. Activate to ${isExcluded ? 'include' : 'exclude'}.`}
+                      style={{ padding: '12px', borderRadius: '12px', textAlign: 'left', font: 'inherit', color: 'inherit', width: '100%',
                         border: !isExcluded && qc ? `1px solid ${qcHigh ? 'rgba(239, 68, 68, 0.6)' : 'rgba(245, 158, 11, 0.5)'}` : '1px solid #475569',
                         backgroundColor: isExcluded ? 'rgba(30, 41, 59, 0.3)' : 'rgba(51, 65, 85, 0.5)', opacity: isExcluded ? 0.5 : 1, cursor: 'pointer' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -152,11 +175,11 @@ const ReviewStep = ({
                           {isExcluded && <span style={{ fontSize: '9px', padding: '2px 4px', backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', borderRadius: '4px' }}>×</span>}
                         </span>
                       </div>
-                      {stats && (<><Sparkline data={stats.values} domain={sparklineDomain} color={isExcluded ? '#475569' : condition.color} />
+                      {stats && (<><Sparkline data={stats.series} domain={sparklineDomain} color={isExcluded ? '#475569' : condition.color} />
                         <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>
-                          Final: {stats.values.length ? `${stats.finalValue.toFixed(1)}%` : '—'}
+                          Final: {stats.finalValue == null ? '—' : `${stats.finalValue.toFixed(1)}${unitSuffix}`}
                         </div></>)}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
