@@ -116,11 +116,13 @@ GitHub Pages through `actions/deploy-pages`, and the site is live at
 https://googlehead123.github.io/incucyte-analyzer/ within about a minute. Nothing else is
 needed, and there is no other hosting — Pages is the only deployment target this repo has.
 
-**Do not run `npm run deploy`.** Pages is still the host — what changed is how files get there.
-Pages used to serve the `gh-pages` branch, which is what `gh-pages -d dist` pushes to. It now
-serves the artifact the workflow uploads (`build_type: workflow`) and no longer reads that
-branch. So the script still exits 0 and still updates `gh-pages`, but the live site does not
-change: a deploy that reports success and ships nothing. Deploy by merging.
+**There is deliberately no `deploy` script — do not add one back.** Pages is still the host;
+what changed is how files get there. It used to serve the `gh-pages` branch, which is what the
+old `gh-pages -d dist` script pushed to. It now serves the artifact the workflow uploads
+(`build_type: workflow`) and no longer reads that branch, so the script exited 0, updated
+`gh-pages`, and changed nothing live — a deploy that reports success and ships nothing. The
+script and the `gh-pages` dependency were removed rather than documented around. Deploy by
+merging.
 
 `vite.config.js` sets `base: '/incucyte-analyzer/'` to match the Pages sub-path. Serving from
 any other origin means changing that first, or every asset 404s.
